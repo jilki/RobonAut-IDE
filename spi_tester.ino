@@ -31,7 +31,7 @@ const int PRESSURE_LSB = 0x20;  //16 least significant bits of pressure
 const int TEMPERATURE = 0x21;   //16 bit temperature reading
 const byte READ = 0b11111100;     // SCP1000's read command
 const byte WRITE = 0b00000010;   // SCP1000's write command
-const int delay_us = 700;
+const int delay_us = 2000;
 
 // pins used for the connection with the sensor
 // the other you need are controlled by the SPI library):
@@ -66,208 +66,44 @@ void loop() {
   delay(1);
   digitalWrite(44,LOW);
   delay(5);
-  digitalWrite(chipSelectPin, LOW);
-  delay(2);
 
-  byte pos0 = SPI.transfer(0x00);
-  delayMicroseconds(delay_us);
-  byte ans0 = SPI.transfer(0xAA);
-  
-  digitalWrite(chipSelectPin, HIGH);
-  delayMicroseconds(delay_us);
-  digitalWrite(chipSelectPin, LOW);
-  
-  delayMicroseconds(delay_us);
-  byte pos1 = SPI.transfer(0x01);
-  delayMicroseconds(delay_us);
-  byte ans1 = SPI.transfer(0xAA);
-  
-  digitalWrite(chipSelectPin, HIGH);
-  delayMicroseconds(delay_us);
-  digitalWrite(chipSelectPin, LOW);
- 
-  delayMicroseconds(delay_us);
-  byte pos2 = SPI.transfer(0x02);
-  delayMicroseconds(delay_us);
-  byte ans2 = SPI.transfer(0xAA);
-  
-  digitalWrite(chipSelectPin, HIGH);
-  delayMicroseconds(delay_us);
-  digitalWrite(chipSelectPin, LOW);
-   
-  delayMicroseconds(delay_us);
-  byte pos3 = SPI.transfer(0x03);
-  delayMicroseconds(delay_us);
-  byte ans3 = SPI.transfer(0xAA);
-    
-  digitalWrite(chipSelectPin, HIGH);
-  delayMicroseconds(delay_us);
-  digitalWrite(chipSelectPin, LOW);
-  
-  delayMicroseconds(delay_us);
-  byte pos4 = SPI.transfer(0x04);
-  delayMicroseconds(delay_us);
-  byte ans4 = SPI.transfer(0xAA);
-    
-  digitalWrite(chipSelectPin, HIGH);
-  delayMicroseconds(delay_us);
-  digitalWrite(chipSelectPin, LOW);
+  byte pos[8] = {0};
+  byte ans[8] = {0};
 
-  delayMicroseconds(delay_us);
-  byte pos5 = SPI.transfer(0x05);
-  delayMicroseconds(delay_us);
-  byte ans5 = SPI.transfer(0xAA);
-    
-  digitalWrite(chipSelectPin, HIGH);
-  delayMicroseconds(delay_us);
-  digitalWrite(chipSelectPin, LOW);
+  for(int i = 0; i < 8; i++)
+  {
+    digitalWrite(chipSelectPin, LOW);
+    delayMicroseconds(delay_us);
   
-  delayMicroseconds(delay_us);
-  byte pos6 = SPI.transfer(0x06);
-  delayMicroseconds(delay_us);
-  byte ans6 = SPI.transfer(0xAA);
-    
-  digitalWrite(chipSelectPin, HIGH);
-  delayMicroseconds(delay_us);
-  digitalWrite(chipSelectPin, LOW);
-  
-  delayMicroseconds(delay_us);
-  byte pos7 = SPI.transfer(0x07);
-  delayMicroseconds(delay_us);
-  byte ans7 = SPI.transfer(0xAA);
-  digitalWrite(chipSelectPin, HIGH);
+    pos[i] = SPI.transfer(i);
+    delayMicroseconds(delay_us);
+    ans[i] = SPI.transfer(0xAA);
+    digitalWrite(chipSelectPin, HIGH);
+    delayMicroseconds(delay_us);  
+  }
 
-  
+  printSensorValue(ans, pos);
+}
+
+void printSensorValue(byte value[8],byte pos[8]){
   Serial.print("\n\n");
-  
-  Serial.print(ans0, DEC);
-  Serial.print("\t");
-  
-  Serial.print(ans1, DEC);
-  Serial.print("\t");
-  
-  Serial.print(ans2, DEC);
-  Serial.print("\t");
 
-  Serial.print(ans3, DEC);
-  Serial.print("\t");
-
-  Serial.print(ans4, DEC);
-  Serial.print("\t");
-
-  Serial.print(ans5, DEC);
-  Serial.print("\t");
-
-  Serial.print(ans6, DEC);
-  Serial.print("\t");
-
-  Serial.print(ans7, DEC);
-  Serial.print("\t");
+  for(int i = 0; i < 8; i++){
+    Serial.print(value[i], DEC);
+    Serial.print("\t");
+  }
 
 
   Serial.print("\nPos: ");
-  Serial.print(pos0, DEC);
-  Serial.print(": ");
-  Serial.print(pos1, DEC);
-  Serial.print("\t");
-
-  Serial.print(pos2, DEC);
-  Serial.print(": ");
-  Serial.print(pos3, DEC);
-  Serial.print("\t");
-
-  Serial.print(pos4, DEC);
-  Serial.print(": ");
-  Serial.print(pos5, DEC);
-  Serial.print("\t");
-
-  Serial.print(pos6, DEC);
-  Serial.print(": ");
-  Serial.print(pos7, DEC);
-  Serial.print("\t");
+  for(int i = 0; i < 4; i++){
+    Serial.print(pos[(i*2)], DEC);
+    Serial.print(": ");
+    Serial.print(pos[(i*2)+1], DEC);
+    Serial.print("\t");
+  }
 
   Serial.print("\n\n");
-  //delay(1000);
-  /*
-  // don't do anything until the data ready pin is high:
-  if (digitalRead(dataReadyPin) == HIGH) {
-    //Read the temperature data
-    int tempData = readRegister(0x21, 2);
-
-    // convert the temperature to celsius and display it:
-    float realTemp = (float)tempData / 20.0;
-    Serial.print("Temp[C]=");
-    Serial.print(realTemp);
-
-
-    //Read the pressure data highest 3 bits:
-    byte  pressure_data_high = readRegister(0x1F, 1);
-    pressure_data_high &= 0b00000111; //you only needs bits 2 to 0
-
-    //Read the pressure data lower 16 bits:
-    unsigned int pressure_data_low = readRegister(0x20, 2);
-    //combine the two parts into one 19-bit number:
-    long pressure = ((pressure_data_high << 16) | pressure_data_low) / 4;
-
-    // display the temperature:
-    Serial.println("\tPressure [Pa]=" + String(pressure));
-  }*/
-}
-
-//Read from or write to register from the SCP1000:
-unsigned int readRegister(byte thisRegister, int bytesToRead) {
-  byte inByte = 0;           // incoming byte from the SPI
-  unsigned int result = 0;   // result to return
-  Serial.print(thisRegister, BIN);
-  Serial.print("\t");
-  // SCP1000 expects the register name in the upper 6 bits
-  // of the byte. So shift the bits left by two bits:
-  thisRegister = thisRegister << 2;
-  // now combine the address and the command into one byte
-  byte dataToSend = thisRegister & READ;
-  Serial.println(thisRegister, BIN);
-  // take the chip select low to select the device:
-  digitalWrite(chipSelectPin, LOW);
-  // send the device the register you want to read:
-  SPI.transfer(dataToSend);
-  // send a value of 0 to read the first byte returned:
-  result = SPI.transfer(0x00);
-  // decrement the number of bytes left to read:
-  bytesToRead--;
-  // if you still have another byte to read:
-  if (bytesToRead > 0) {
-    // shift the first byte left, then get the second byte:
-    result = result << 8;
-    inByte = SPI.transfer(0x00);
-    // combine the byte you just got with the previous one:
-    result = result | inByte;
-    // decrement the number of bytes left to read:
-    bytesToRead--;
-  }
-  // take the chip select high to de-select:
-  digitalWrite(chipSelectPin, HIGH);
-  // return the result:
-  return (result);
 }
 
 
-//Sends a write command to SCP1000
-
-void writeRegister(byte thisRegister, byte thisValue) {
-
-  // SCP1000 expects the register address in the upper 6 bits
-  // of the byte. So shift the bits left by two bits:
-  thisRegister = thisRegister << 2;
-  // now combine the register address and the command into one byte:
-  byte dataToSend = thisRegister | WRITE;
-
-  // take the chip select low to select the device:
-  digitalWrite(chipSelectPin, LOW);
-
-  SPI.transfer(dataToSend); //Send register location
-  SPI.transfer(thisValue);  //Send value to record into register
-
-  // take the chip select high to de-select:
-  digitalWrite(chipSelectPin, HIGH);
-}
 
