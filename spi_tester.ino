@@ -36,7 +36,7 @@ const int delay_us = 2000;
 // pins used for the connection with the sensor
 // the other you need are controlled by the SPI library):
 const int dataReadyPin = 6;
-const int chipSelectPin = 5;
+const int chipSelectPin = 10;
 
 void setup() {
   Serial.begin(9600);
@@ -51,10 +51,6 @@ void setup() {
   pinMode(chipSelectPin, OUTPUT);
   pinMode(44, OUTPUT);
 
-  //Configure SCP1000 for low noise configuration:
-  //writeRegister(0x02, 0x2D);
-  //writeRegister(0x01, 0x03);
-  //writeRegister(0x03, 0x02);
   // give the sensor time to set up:
   delay(100);
   Serial.println("Loop");
@@ -67,25 +63,15 @@ void loop() {
   digitalWrite(44,LOW);
   delay(5);
 
-  byte pos[8] = {0};
-  byte ans[8] = {0};
+  byte pos[4][8] = {{0}};
+  byte ans[4][8] = {{0}};
 
-  for(int i = 0; i < 8; i++)
-  {
-    digitalWrite(chipSelectPin, LOW);
-    delayMicroseconds(delay_us);
+  readSensor(0, pos[0], ans[0]);
   
-    pos[i] = SPI.transfer(i);
-    delayMicroseconds(delay_us);
-    ans[i] = SPI.transfer(0xAA);
-    digitalWrite(chipSelectPin, HIGH);
-    delayMicroseconds(delay_us);  
-  }
-
-  printSensorValue(ans, pos);
+  printSensorValue(0, ans[0], pos[0]);
 }
 
-void printSensorValue(byte value[8],byte pos[8]){
+void printSensorValue(int boardNum, byte value[8],byte pos[8]){
   Serial.print("\n\n");
 
   for(int i = 0; i < 8; i++){
@@ -103,6 +89,80 @@ void printSensorValue(byte value[8],byte pos[8]){
   }
 
   Serial.print("\n\n");
+}
+
+void readSensor(int boardNum, byte *pos, byte *ans){
+  
+  for(int i = 0; i < 8; i++)
+  {
+    digitalWrite(chipSelectPin, LOW);
+    delayMicroseconds(delay_us);
+  
+    pos[i] = SPI.transfer(i);
+    delayMicroseconds(delay_us);
+    ans[i] = SPI.transfer(0xAA);
+    digitalWrite(chipSelectPin, HIGH);
+    delayMicroseconds(delay_us);  
+  }
+
+  //Experience based error correction
+  if(ans[2]==198){
+    digitalWrite(chipSelectPin, LOW);
+    delayMicroseconds(delay_us);
+  
+    pos[2] = SPI.transfer(2);
+    delayMicroseconds(delay_us);
+    ans[2] = SPI.transfer(0xAA);
+    digitalWrite(chipSelectPin, HIGH);
+    delayMicroseconds(delay_us);
+  }
+
+  if(ans[2]==198){
+    digitalWrite(chipSelectPin, LOW);
+    delayMicroseconds(delay_us);
+  
+    pos[2] = SPI.transfer(2);
+    delayMicroseconds(delay_us);
+    ans[2] = SPI.transfer(0xAA);
+    digitalWrite(chipSelectPin, HIGH);
+    delayMicroseconds(delay_us);
+  }
+
+  if(ans[2]==198){
+    if(ans[3]!=199)
+      ans[2]=(ans[1]+ans[3])/2;
+    else
+      ans[2]=ans[1];
+  }
+
+  if(ans[3]==199){
+    digitalWrite(chipSelectPin, LOW);
+    delayMicroseconds(delay_us);
+  
+    pos[3] = SPI.transfer(3);
+    delayMicroseconds(delay_us);
+    ans[3] = SPI.transfer(0xAA);
+    digitalWrite(chipSelectPin, HIGH);
+    delayMicroseconds(delay_us);  
+  }
+  
+  if(ans[3]==199){
+    digitalWrite(chipSelectPin, LOW);
+    delayMicroseconds(delay_us);
+  
+    pos[3] = SPI.transfer(3);
+    delayMicroseconds(delay_us);
+    ans[3] = SPI.transfer(0xAA);
+    digitalWrite(chipSelectPin, HIGH);
+    delayMicroseconds(delay_us);  
+  }
+
+  if(ans[3]==199){
+    if(ans[2]!=198)
+      ans[3]=(ans[2]+ans[4])/2;
+    else
+      ans[3]=ans[4];
+  }  
 }
 
 
