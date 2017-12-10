@@ -92,10 +92,26 @@ void loop() {
   
   readSensor(4,  pos[3], ans[3]);
   
-  printSensorValue(10, ans[0], pos[0]);
-  printSensorValue(51, ans[1], pos[1]);
-  printSensorValue(2,  ans[2], pos[2]);
-  printSensorValue(4,  ans[3], pos[3]);
+  //printSensorValue(10, ans[0], pos[0]);
+  //printSensorValue(51, ans[1], pos[1]);
+  //printSensorValue(2,  ans[2], pos[2]);
+  //printSensorValue(4,  ans[3], pos[3]);
+
+  printSensorValue(4,  ans[0], pos[0]);
+  printSensorValue(2,  ans[1], pos[1]);
+  printSensorValue(51, ans[2], pos[2]);
+  printSensorValue(10, ans[3], pos[3]);
+
+  int num = 0;
+  int denum = 0;
+  for(int i = 0; i < 4; i++){
+    for(int j = 0; j < 8; j++){
+      num += ((i*8)+j-16)*ans[i][j];
+      denum += ans[i][j];
+    }
+  }
+  Serial.print("\n\n\n\nCalcuated line pos: ");
+  Serial.println(num/(float)denum);
 }
 
 void printSensorValue(int boardNum, byte value[8],byte pos[8]){
@@ -126,10 +142,10 @@ void readSensor(int boardNum, byte *pos, byte *ans){
     digitalWrite(boardNum, LOW);
     delayMicroseconds(delay_us);
   
-    pos[i] = SPI.transfer(i);
+    pos[i] = SPI.transfer(7-i);
     delayMicroseconds(delay_us);
     if(pos[i]!=227){
-        pos[i] = SPI.transfer(i);
+        pos[i] = SPI.transfer(7-i);
         delayMicroseconds(delay_us);
     }
     ans[i] = SPI.transfer(0xAA);
@@ -138,62 +154,62 @@ void readSensor(int boardNum, byte *pos, byte *ans){
   } 
 
   //Experience based error correction
-  if(ans[2]==198){
+  if(ans[4]==199){
     digitalWrite(boardNum, LOW);
     delayMicroseconds(delay_us);
   
-    pos[2] = SPI.transfer(2);
+    pos[4] = SPI.transfer(3);
     delayMicroseconds(delay_us);
-    ans[2] = SPI.transfer(0xAA);
+    ans[4] = SPI.transfer(0xAA);
     digitalWrite(boardNum, HIGH);
     delayMicroseconds(delay_us);
   }
 
-  if(ans[2]==198){
+  if(ans[4]==199){
     digitalWrite(boardNum, LOW);
     delayMicroseconds(delay_us);
   
-    pos[2] = SPI.transfer(2);
+    pos[4] = SPI.transfer(3);
     delayMicroseconds(delay_us);
-    ans[2] = SPI.transfer(0xAA);
+    ans[4] = SPI.transfer(0xAA);
     digitalWrite(boardNum, HIGH);
     delayMicroseconds(delay_us);
   }
 
-  if(ans[2]==198){
-    if(ans[3]!=199)
-      ans[2]=(ans[1]+ans[3])/2;
+  if(ans[4]==199){
+    if(ans[5]!=198)
+      ans[4]=(ans[3]+ans[5])/2;
     else
-      ans[2]=ans[1];
+      ans[4]=ans[3];
   }
 
-  if(ans[3]==199){
+  if(ans[5]==198){
     digitalWrite(boardNum, LOW);
     delayMicroseconds(delay_us);
   
-    pos[3] = SPI.transfer(3);
+    pos[5] = SPI.transfer(2);
     delayMicroseconds(delay_us);
-    ans[3] = SPI.transfer(0xAA);
+    ans[5] = SPI.transfer(0xAA);
     digitalWrite(boardNum, HIGH);
     delayMicroseconds(delay_us);  
   }
   
-  if(ans[3]==199){
+  if(ans[5]==198){
     digitalWrite(boardNum, LOW);
     delayMicroseconds(delay_us);
   
-    pos[3] = SPI.transfer(3);
+    pos[5] = SPI.transfer(2);
     delayMicroseconds(delay_us);
-    ans[3] = SPI.transfer(0xAA);
+    ans[5] = SPI.transfer(0xAA);
     digitalWrite(boardNum, HIGH);
     delayMicroseconds(delay_us);  
   }
 
-  if(ans[3]==199){
-    if(ans[2]!=198)
-      ans[3]=(ans[2]+ans[4])/2;
+  if(ans[5]==198){
+    if(ans[5]!=199)
+      ans[5]=(ans[4]+ans[6])/2;
     else
-      ans[3]=ans[4];
+      ans[5]=ans[6];
   }  
 }
 
