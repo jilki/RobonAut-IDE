@@ -31,7 +31,7 @@ const int PRESSURE_LSB = 0x20;  //16 least significant bits of pressure
 const int TEMPERATURE = 0x21;   //16 bit temperature reading
 const byte READ = 0b11111100;     // SCP1000's read command
 const byte WRITE = 0b00000010;   // SCP1000's write command
-const int delay_us = 2000;
+const int delay_us = 500;
 
 // pins used for the connection with the sensor
 // the other you need are controlled by the SPI library):
@@ -39,7 +39,7 @@ const int dataReadyPin = 6;
 const int chipSelectPin = 10;
 
 void setup() {
-  Serial.begin(9600);
+  Serial.begin(115200);
   Serial.print("started\n");
 
   // start the SPI library:
@@ -49,6 +49,9 @@ void setup() {
   // initalize the  data ready and chip select pins:
   pinMode(dataReadyPin, INPUT);
   pinMode(chipSelectPin, OUTPUT);
+  pinMode(51, OUTPUT);
+  pinMode(4, OUTPUT);
+  pinMode(2, OUTPUT);
   pinMode(44, OUTPUT);
 
   // give the sensor time to set up:
@@ -66,13 +69,38 @@ void loop() {
   byte pos[4][8] = {{0}};
   byte ans[4][8] = {{0}};
 
-  readSensor(0, pos[0], ans[0]);
+  readSensor(10, pos[0], ans[0]);
+
+  digitalWrite(44,HIGH);
+  delay(1);
+  digitalWrite(44,LOW);
+  delay(5);
   
-  printSensorValue(0, ans[0], pos[0]);
+  readSensor(51, pos[1], ans[1]);
+
+  digitalWrite(44,HIGH);
+  delay(1);
+  digitalWrite(44,LOW);
+  delay(5);
+  
+  readSensor(2,  pos[2], ans[2]);
+
+  digitalWrite(44,HIGH);
+  delay(1);
+  digitalWrite(44,LOW);
+  delay(5);
+  
+  readSensor(4,  pos[3], ans[3]);
+  
+  printSensorValue(10, ans[0], pos[0]);
+  printSensorValue(51, ans[1], pos[1]);
+  printSensorValue(2,  ans[2], pos[2]);
+  printSensorValue(4,  ans[3], pos[3]);
 }
 
 void printSensorValue(int boardNum, byte value[8],byte pos[8]){
-  Serial.print("\n\n");
+  Serial.print("\n\nModule: ");
+  Serial.println(boardNum);
 
   for(int i = 0; i < 8; i++){
     Serial.print(value[i], DEC);
@@ -95,36 +123,40 @@ void readSensor(int boardNum, byte *pos, byte *ans){
   
   for(int i = 0; i < 8; i++)
   {
-    digitalWrite(chipSelectPin, LOW);
+    digitalWrite(boardNum, LOW);
     delayMicroseconds(delay_us);
   
     pos[i] = SPI.transfer(i);
     delayMicroseconds(delay_us);
+    if(pos[i]!=227){
+        pos[i] = SPI.transfer(i);
+        delayMicroseconds(delay_us);
+    }
     ans[i] = SPI.transfer(0xAA);
-    digitalWrite(chipSelectPin, HIGH);
+    digitalWrite(boardNum, HIGH);
     delayMicroseconds(delay_us);  
-  }
+  } 
 
   //Experience based error correction
   if(ans[2]==198){
-    digitalWrite(chipSelectPin, LOW);
+    digitalWrite(boardNum, LOW);
     delayMicroseconds(delay_us);
   
     pos[2] = SPI.transfer(2);
     delayMicroseconds(delay_us);
     ans[2] = SPI.transfer(0xAA);
-    digitalWrite(chipSelectPin, HIGH);
+    digitalWrite(boardNum, HIGH);
     delayMicroseconds(delay_us);
   }
 
   if(ans[2]==198){
-    digitalWrite(chipSelectPin, LOW);
+    digitalWrite(boardNum, LOW);
     delayMicroseconds(delay_us);
   
     pos[2] = SPI.transfer(2);
     delayMicroseconds(delay_us);
     ans[2] = SPI.transfer(0xAA);
-    digitalWrite(chipSelectPin, HIGH);
+    digitalWrite(boardNum, HIGH);
     delayMicroseconds(delay_us);
   }
 
@@ -136,24 +168,24 @@ void readSensor(int boardNum, byte *pos, byte *ans){
   }
 
   if(ans[3]==199){
-    digitalWrite(chipSelectPin, LOW);
+    digitalWrite(boardNum, LOW);
     delayMicroseconds(delay_us);
   
     pos[3] = SPI.transfer(3);
     delayMicroseconds(delay_us);
     ans[3] = SPI.transfer(0xAA);
-    digitalWrite(chipSelectPin, HIGH);
+    digitalWrite(boardNum, HIGH);
     delayMicroseconds(delay_us);  
   }
   
   if(ans[3]==199){
-    digitalWrite(chipSelectPin, LOW);
+    digitalWrite(boardNum, LOW);
     delayMicroseconds(delay_us);
   
     pos[3] = SPI.transfer(3);
     delayMicroseconds(delay_us);
     ans[3] = SPI.transfer(0xAA);
-    digitalWrite(chipSelectPin, HIGH);
+    digitalWrite(boardNum, HIGH);
     delayMicroseconds(delay_us);  
   }
 
