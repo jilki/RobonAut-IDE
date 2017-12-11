@@ -33,7 +33,7 @@ Servo motorM;
 float ratio=32;
 float kuszob=0.5;
 int base=1500;
-int upper=1900;
+int upper=1610;
 
 
 //Sensor's memory register addresses:
@@ -42,7 +42,7 @@ const int PRESSURE_LSB = 0x20;  //16 least significant bits of pressure
 const int TEMPERATURE = 0x21;   //16 bit temperature reading
 const byte READ = 0b11111100;     // SCP1000's read command
 const byte WRITE = 0b00000010;   // SCP1000's write command
-const int delay_us = 2000;
+const int delay_us = 100;
 
 // pins used for the connection with the sensor
 // the other you need are controlled by the SPI library):
@@ -92,37 +92,34 @@ void loop() {
   byte ans[4][8] = {{0}};
 
   readSensor(51, pos[0], ans[0]);
-
+/*
   digitalWrite(44,HIGH);
   delay(1);
   digitalWrite(44,LOW);
   delay(5);
-  
+  */
   readSensor(10, pos[1], ans[1]);
 
-  digitalWrite(44,HIGH);
+/*  digitalWrite(44,HIGH);
   delay(1);
   digitalWrite(44,LOW);
   delay(5);
-  
+  */
   readSensor(5,  pos[2], ans[2]);
 
-  digitalWrite(44,HIGH);
+/*  digitalWrite(44,HIGH);
   delay(1);
   digitalWrite(44,LOW);
   delay(5);
-  
+  */
   readSensor(4,  pos[3], ans[3]);
   
-  //printSensorValue(10, ans[0], pos[0]);
-  //printSensorValue(51, ans[1], pos[1]);
-  //printSensorValue(2,  ans[2], pos[2]);
-  //printSensorValue(4,  ans[3], pos[3]);
 
-  printSensorValue(51,  ans[0], pos[0]);
-  printSensorValue(10,  ans[1], pos[1]);
-  printSensorValue(5, ans[2], pos[2]);
-  printSensorValue(4, ans[3], pos[3]);
+
+  //printSensorValue(51,  ans[0], pos[0]);
+  //printSensorValue(10,  ans[1], pos[1]);
+  //printSensorValue(5, ans[2], pos[2]);
+  //printSensorValue(4, ans[3], pos[3]);
 
   int num = 0;
   int denum = 0;
@@ -134,16 +131,22 @@ void loop() {
       }
     }
   }
-  Serial.print("\n\n\n\nCalcuated line pos: ");
-  Serial.println(num/(float)denum);
+
+  
+  //Serial.print("\n\n\n\nCalcuated line pos: ");
+  //Serial.println(num/(float)denum);
+  
   float linePos=num/(float)denum+0.5;
-  Serial.print("\n\n\LinePos in float");
-  Serial.println(linePos);
-  if(linePos<-0.25 || linePos>0.25)
+  
+  //Serial.print("\n\n\LinePos in float");
+  //Serial.println(linePos);
+
+  
+  if(linePos<-0.01 || linePos>0.01)
   {
     motorM.writeMicroseconds(upper);
     servoMotor.writeMicroseconds(base+ratio*linePos);
-      Serial.print("\n\nbeléptem a felételebe");
+      //Serial.print("\n\nbeléptem a felételebe");
      }
   else{
        servoMotor.writeMicroseconds(base);
@@ -191,6 +194,7 @@ void readSensor(int boardNum, byte *pos, byte *ans){
     digitalWrite(boardNum, HIGH);
     delayMicroseconds(delay_us);  
   } 
+
 
   //Experience based error correction
   if(ans[4]==199){
@@ -261,6 +265,7 @@ void readSensor(int boardNum, byte *pos, byte *ans){
     digitalWrite(boardNum, HIGH);
     delayMicroseconds(delay_us);  
   }
+  
 }
 
 
