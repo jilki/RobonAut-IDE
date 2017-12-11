@@ -24,15 +24,17 @@
 
 // the sensor communicates using SPI, so include the library:
 #include <SPI.h>
-/*
 #include <Servo.h>
 #define _servopin  32
+#define _motorpin  6     
 Servo servoMotor;
+Servo motorM;
 
 float ratio=32;
 float kuszob=0.5;
 int base=1500;
-*/
+int upper=1900;
+
 
 //Sensor's memory register addresses:
 const int PRESSURE = 0x1F;      //3 most significant bits of pressure
@@ -68,14 +70,14 @@ void setup() {
 //  pinMode(29, OUTPUT);
 //  digitalWrite(29, LOW);
 
-  /*
+
    servoMotor.attach(_servopin);
    servoMotor.writeMicroseconds(base);
-   delay(100);
-   */
+   motorM.attach(_motorpin);
+   motorM.writeMicroseconds(base);
 
   // give the sensor time to set up:
-  delay(100);
+  delay(4000);
   Serial.println("Loop");
 }
 
@@ -134,19 +136,21 @@ void loop() {
   }
   Serial.print("\n\n\n\nCalcuated line pos: ");
   Serial.println(num/(float)denum);
-
-  /*
-   float linePos=num/(float)denum+0.5;
-   if(linePos<0.5 && linePos>-0.5)
-   {
-    servoMotor.writeMicroseconds(base-ratio*linePos);
-   }
-   else{
-    servoMotor.writeMicroseconds(base);
-   }
+  float linePos=num/(float)denum+0.5;
+  Serial.print("\n\n\LinePos in float");
+  Serial.println(linePos);
+  if(linePos<-0.25 || linePos>0.25)
+  {
+    motorM.writeMicroseconds(upper);
+    servoMotor.writeMicroseconds(base+ratio*linePos);
+      Serial.print("\n\nbeléptem a felételebe");
+     }
+  else{
+       servoMotor.writeMicroseconds(base);
+       motorM.writeMicroseconds(base);
+      }
+  
    
-   
-   */
 }
 
 void printSensorValue(int boardNum, byte value[8],byte pos[8]){
