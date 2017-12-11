@@ -24,6 +24,15 @@
 
 // the sensor communicates using SPI, so include the library:
 #include <SPI.h>
+/*
+#include <Servo.h>
+#define _servopin  32
+Servo servoMotor;
+
+float ratio=32;
+float kuszob=0.5;
+int base=1500;
+*/
 
 //Sensor's memory register addresses:
 const int PRESSURE = 0x1F;      //3 most significant bits of pressure
@@ -31,7 +40,7 @@ const int PRESSURE_LSB = 0x20;  //16 least significant bits of pressure
 const int TEMPERATURE = 0x21;   //16 bit temperature reading
 const byte READ = 0b11111100;     // SCP1000's read command
 const byte WRITE = 0b00000010;   // SCP1000's write command
-const int delay_us = 500;
+const int delay_us = 2000;
 
 // pins used for the connection with the sensor
 // the other you need are controlled by the SPI library):
@@ -50,9 +59,20 @@ void setup() {
   pinMode(dataReadyPin, INPUT);
   pinMode(chipSelectPin, OUTPUT);
   pinMode(51, OUTPUT);
+//  pinMode(2, OUTPUT);
+  pinMode(5, OUTPUT);
   pinMode(4, OUTPUT);
-  pinMode(2, OUTPUT);
   pinMode(44, OUTPUT);
+//  pinMode(45, OUTPUT);
+//  digitalWrite(45, LOW);
+//  pinMode(29, OUTPUT);
+//  digitalWrite(29, LOW);
+
+  /*
+   servoMotor.attach(_servopin);
+   servoMotor.writeMicroseconds(base);
+   delay(100);
+   */
 
   // give the sensor time to set up:
   delay(100);
@@ -69,21 +89,21 @@ void loop() {
   byte pos[4][8] = {{0}};
   byte ans[4][8] = {{0}};
 
-  readSensor(10, pos[0], ans[0]);
+  readSensor(51, pos[0], ans[0]);
 
   digitalWrite(44,HIGH);
   delay(1);
   digitalWrite(44,LOW);
   delay(5);
   
-  readSensor(51, pos[1], ans[1]);
+  readSensor(10, pos[1], ans[1]);
 
   digitalWrite(44,HIGH);
   delay(1);
   digitalWrite(44,LOW);
   delay(5);
   
-  readSensor(2,  pos[2], ans[2]);
+  readSensor(5,  pos[2], ans[2]);
 
   digitalWrite(44,HIGH);
   delay(1);
@@ -97,21 +117,36 @@ void loop() {
   //printSensorValue(2,  ans[2], pos[2]);
   //printSensorValue(4,  ans[3], pos[3]);
 
-  printSensorValue(4,  ans[0], pos[0]);
-  printSensorValue(2,  ans[1], pos[1]);
-  printSensorValue(51, ans[2], pos[2]);
-  printSensorValue(10, ans[3], pos[3]);
+  printSensorValue(51,  ans[0], pos[0]);
+  printSensorValue(10,  ans[1], pos[1]);
+  printSensorValue(5, ans[2], pos[2]);
+  printSensorValue(4, ans[3], pos[3]);
 
   int num = 0;
   int denum = 0;
   for(int i = 0; i < 4; i++){
     for(int j = 0; j < 8; j++){
-      num += ((i*8)+j-16)*ans[i][j];
-      denum += ans[i][j];
+      if(ans[i][j]>160){
+        num += ((i*8)+j-16)*ans[i][j];
+        denum += ans[i][j];
+      }
     }
   }
   Serial.print("\n\n\n\nCalcuated line pos: ");
   Serial.println(num/(float)denum);
+
+  /*
+   float linePos=num/(float)denum+0.5;
+   if(linePos<0.5 && linePos>-0.5)
+   {
+    servoMotor.writeMicroseconds(base-ratio*linePos);
+   }
+   else{
+    servoMotor.writeMicroseconds(base);
+   }
+   
+   
+   */
 }
 
 void printSensorValue(int boardNum, byte value[8],byte pos[8]){
@@ -210,7 +245,18 @@ void readSensor(int boardNum, byte *pos, byte *ans){
       ans[5]=(ans[4]+ans[6])/2;
     else
       ans[5]=ans[6];
-  }  
+  }
+
+  if(ans[0]==156){
+    digitalWrite(boardNum, LOW);
+    delayMicroseconds(delay_us);
+  
+    pos[0] = SPI.transfer(7);
+    delayMicroseconds(delay_us);
+    ans[0] = SPI.transfer(0xAA);
+    digitalWrite(boardNum, HIGH);
+    delayMicroseconds(delay_us);  
+  }
 }
 
 
