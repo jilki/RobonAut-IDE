@@ -25,15 +25,19 @@
 // the sensor communicates using SPI, so include the library:
 #include <SPI.h>
 #include <Servo.h>
+#include <math.h>
 #define _servopin  32
 #define _motorpin  6     
 Servo servoMotor;
 Servo motorM;
 
-float ratio=32;
+float ratioP=25;   // 50 osszcillál és kitér kanyarban
+float ratioD=100;   // 100
 float kuszob=0.5;
-int base=1500;
+int baseservo=1550;
+int basemotor=1500;
 int upper=1610;
+float linePosold=0;
 
 
 //Sensor's memory register addresses:
@@ -72,9 +76,9 @@ void setup() {
 
 
    servoMotor.attach(_servopin);
-   servoMotor.writeMicroseconds(base);
+   servoMotor.writeMicroseconds(baseservo);
    motorM.attach(_motorpin);
-   motorM.writeMicroseconds(base);
+   motorM.writeMicroseconds(basemotor);
 
   // give the sensor time to set up:
   delay(4000);
@@ -139,20 +143,43 @@ void loop() {
   float linePos=num/(float)denum+0.5;
   
   //Serial.print("\n\n\LinePos in float");
-  //Serial.println(linePos);
-
+  Serial.println(linePos);
+  Serial.print("deltahiba:");
+  Serial.println(linePos-linePosold);
+  Serial.print("ratioD:");
+  Serial.println(ratioD);
   
-  if(linePos<-0.01 || linePos>0.01)
+  //if(linePos<-0.01 || linePos>0.01)
+  if(!isnan(linePos))
   {
-    motorM.writeMicroseconds(upper);
-    servoMotor.writeMicroseconds(base+ratio*linePos);
-      //Serial.print("\n\nbeléptem a felételebe");
+    if(linePos>5 || linePos < -5){
+       motorM.writeMicroseconds(upper);
+       servoMotor.writeMicroseconds(baseservo+ratioP*linePos+ratioD*(linePos-linePosold));
+       //Serial.print("\n\nbeléptem a felételebe");
      }
+     else{
+       motorM.writeMicroseconds(upper);
+       servoMotor.writeMicroseconds(baseservo+ratioP*linePos+ratioD*(linePos-linePosold));
+     }
+     linePosold=linePos;
+  }
   else{
-       servoMotor.writeMicroseconds(base);
-       motorM.writeMicroseconds(base);
+      if(linePosold<-12){
+        servoMotor.writeMicroseconds(1000);
       }
-  
+      if(linePosold > 12){
+        servoMotor.writeMicroseconds(2000);
+      }
+       //servoMotor.writeMicroseconds(base);
+       motorM.writeMicroseconds(basemotor);
+      }
+   Serial.print("P*hiba:");
+   Serial.println(ratioP*linePos);
+   Serial.print("D*deltahiba");
+   Serial.println(ratioD*(linePos-linePosold));
+   Serial.print("Lineposold:");
+   Serial.println(linePosold);
+
    
 }
 
