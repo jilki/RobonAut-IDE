@@ -32,7 +32,7 @@
 Servo servoMotor;
 Servo motorM;
 
-float ratioP=25;   // 50 osszcillál és kitér kanyarban
+float ratioP=30;   // 15 jó egyenesre
 float ratioD=100;   // 100
 float kuszob=0.5;
 int baseservo=1550;
