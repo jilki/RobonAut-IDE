@@ -62,16 +62,26 @@ void setup() {
 
   // start the SPI library:
   SPI.begin();
-  SPI.beginTransaction(SPISettings(2000000, MSBFIRST, SPI_MODE1));
+  SPI.beginTransaction(SPISettings(1000000, MSBFIRST, SPI_MODE1));
 
   // initalize the  data ready and chip select pins:
   pinMode(dataReadyPin, INPUT);
   pinMode(chipSelectPin, OUTPUT);
+
+  
   pinMode(51, OUTPUT);
+
+    pinMode(2, OUTPUT);
+    
 //  pinMode(2, OUTPUT);
   pinMode(5, OUTPUT);
   pinMode(4, OUTPUT);
+
+  pinMode(8, OUTPUT); 
+  
   pinMode(44, OUTPUT);
+
+
 //  pinMode(45, OUTPUT);
 //  digitalWrite(45, LOW);
 //  pinMode(29, OUTPUT);
@@ -95,8 +105,8 @@ void loop() {
   digitalWrite(44,LOW);
   delay(5);
 
-  byte pos[4][8] = {{0}};
-  byte ans[4][8] = {{0}};
+  byte pos[6][8] = {{0}};
+  byte ans[6][8] = {{0}};
 
   //readSensor(51, pos[0], ans[0]);
 /*
@@ -121,21 +131,17 @@ void loop() {
   */
   //readSensor(4,  pos[3], ans[3]);
 
-  byte muliDimAns[3][4][8];
-  readSensor(51, pos[0], muliDimAns[0][0]);
-  readSensor(10, pos[0], muliDimAns[0][1]);
-  readSensor(5,  pos[0], muliDimAns[0][2]);
-  readSensor(4,  pos[0], muliDimAns[0][3]);
-  readSensor(51, pos[1], muliDimAns[1][0]);
-  readSensor(10, pos[1], muliDimAns[1][1]);
-  readSensor(5,  pos[1], muliDimAns[1][2]);
-  readSensor(4,  pos[1], muliDimAns[1][3]);
-  readSensor(51, pos[2], muliDimAns[2][0]);
-  readSensor(10, pos[2], muliDimAns[2][1]);
-  readSensor(5,  pos[2], muliDimAns[2][2]);
-  readSensor(4,  pos[2], muliDimAns[2][3]);
+  byte muliDimAns[3][6][8];
+  for(int j = 0; j < 3; j++){
+    readSensor(8,  pos[j], muliDimAns[j][0]);
+    readSensor(10, pos[j], muliDimAns[j][1]);
+    readSensor(51, pos[j], muliDimAns[j][2]);
+    readSensor(5,  pos[j], muliDimAns[j][3]);
+    readSensor(4,  pos[j], muliDimAns[j][4]);
+    readSensor(3,  pos[j], muliDimAns[j][5]);
+  }
 
-  for(int i = 0; i<4; i++){
+  for(int i = 0; i<6; i++){
     for(int j=0; j<8; j++){
       if(muliDimAns[0][i][j] == muliDimAns[1][i][j]){
         ans[i][j] = muliDimAns[0][i][j];
@@ -149,10 +155,12 @@ void loop() {
     }
   }
 
-//  printSensorValue(51,  ans[0], pos[0]);
-//  printSensorValue(10,  ans[1], pos[1]);
-//  printSensorValue(5, ans[2], pos[2]);
-//  printSensorValue(4, ans[3], pos[3]);
+  printSensorValue(8,   muliDimAns[0][0], pos[0]);
+  printSensorValue(10,  muliDimAns[0][1], pos[1]);
+  printSensorValue(51,  muliDimAns[0][2], pos[2]);
+  printSensorValue(5,   muliDimAns[0][3], pos[3]);
+  printSensorValue(4,   muliDimAns[0][4], pos[4]);
+  printSensorValue(3,   muliDimAns[0][5], pos[5]);
 
   int num = 0;
   int denum = 0;
@@ -166,8 +174,8 @@ void loop() {
     }
   }*/
 
-  int linValues[32];
-   for(int j = 0; j < 4; j++){
+  int linValues[48];
+   for(int j = 0; j < 6; j++){
     for(int k = 0; k < 8; k++){
       linValues[j*8+k] = ans[j][k];
       }
@@ -180,25 +188,25 @@ void loop() {
   }*/
 
 //  Serial.println("linearization finished");
-  int filtered[28];
+  int filtered[44];
  
-  for(int i=0; i < 28;i++){
+  for(int i=0; i < 44;i++){
     filtered[i] = linValues[i]*0.11 + linValues[i+1]*0.22 + linValues[i+2]*0.34 + linValues[i+3]*0.22 + linValues[i+4]*0.11;
        if(filtered[i]>70){
-        num += (i-14)*filtered[i];
+        num += (i-22)*filtered[i];
         denum += filtered[i];
       }
   }
 
-//  Serial.println("\nFiltered");
-//  for(int i=0; i<28; i++){
-//    Serial.print(filtered[i]);
-//    Serial.print(" ");
-//  }
+  Serial.println("\nFiltered");
+  for(int i=0; i<44; i++){
+    Serial.print(filtered[i]);
+    Serial.print(" ");
+  }
   
-  //Serial.print("\n\n\n\nCalcuated line pos: ");
+  Serial.print("\n\n\n\nCalcuated line pos: ");
   Serial.println(num/(float)denum+0.5);
-  //Serial.println(timeElapsed);
+  Serial.println(timeElapsed);
   
   float linePos=num/(float)denum+0.5;
   
@@ -283,12 +291,31 @@ void readSensor(int boardNum, byte *pos, byte *ans){
     }
     ans[i] = SPI.transfer(0xAA);
     digitalWrite(boardNum, HIGH);
-    delayMicroseconds(delay_us);  
+    delayMicroseconds(delay_us);
+    if(ans[i]==227)
+      i--;
   } 
 
 
   //Experience based error correction
-  if(ans[4]==199){
+
+/*    ans[2] = magicCorrection(boardNum, 2, 146, ans[2]);
+    ans[3] = magicCorrection(boardNum, 3, 146, ans[3]);
+
+    ans[4] = magicCorrection(boardNum, 4, 146, ans[4]);
+    ans[5] = magicCorrection(boardNum, 5, 146, ans[5]);
+*/
+/*    ans[2] = magicCorrection(boardNum, 2, 198, ans[2]);
+    if(ans[2]==198)
+      ans[2] = ans[1];
+    ans[3] = magicCorrection(boardNum, 3, 199, ans[3]);
+    if(ans[3]==199)
+      ans[3] = ans[4];
+    ans[4] = magicCorrection(boardNum, 4, 199, ans[4]);
+    ans[5] = magicCorrection(boardNum, 5, 198, ans[5]);
+*/   
+
+/*  if(ans[4]==199){
     digitalWrite(boardNum, LOW);
     delayMicroseconds(delay_us);
   
@@ -356,8 +383,33 @@ void readSensor(int boardNum, byte *pos, byte *ans){
     digitalWrite(boardNum, HIGH);
     delayMicroseconds(delay_us);  
   }
-  
+  */
 }
 
+byte magicCorrection(int CS, int pos, byte magicNum, byte currentVal){
+  if(currentVal!=magicNum){
+      digitalWrite(CS, LOW);
+      delayMicroseconds(delay_us);
+    
+      byte dummyPos = SPI.transfer(pos);
+      delayMicroseconds(delay_us);
+      byte ans = SPI.transfer(0xAA);
+      digitalWrite(CS, HIGH);
+      delayMicroseconds(delay_us);
+    
+    if(ans == magicNum){
+      digitalWrite(CS, LOW);
+      delayMicroseconds(delay_us);
+    
+      dummyPos = SPI.transfer(pos);
+      delayMicroseconds(delay_us);
+      ans = SPI.transfer(0xAA);
+      digitalWrite(CS, HIGH);
+      delayMicroseconds(delay_us);
+    }
+      return ans;
+  }
 
+ return currentVal;
+}
 
