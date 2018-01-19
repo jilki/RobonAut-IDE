@@ -69,15 +69,17 @@ void setup() {
   pinMode(chipSelectPin, OUTPUT);
 
   
+  pinMode(8,  OUTPUT);
+
+  pinMode(10, OUTPUT);    
   pinMode(51, OUTPUT);
-
-    pinMode(2, OUTPUT);
-    
-//  pinMode(2, OUTPUT);
   pinMode(5, OUTPUT);
-  pinMode(4, OUTPUT);
 
-  pinMode(8, OUTPUT); 
+  
+  pinMode(4,  OUTPUT);
+  pinMode(3, OUTPUT);
+  pinMode(2,  OUTPUT);
+
   
   pinMode(44, OUTPUT);
 
@@ -132,15 +134,18 @@ void loop() {
   //readSensor(4,  pos[3], ans[3]);
 
   byte muliDimAns[3][6][8];
+  byte tresholdedValues[6]={0};
   for(int j = 0; j < 3; j++){
-    readSensor(8,  pos[j], muliDimAns[j][0]);
-    readSensor(10, pos[j], muliDimAns[j][1]);
-    readSensor(51, pos[j], muliDimAns[j][2]);
-    readSensor(5,  pos[j], muliDimAns[j][3]);
-    readSensor(4,  pos[j], muliDimAns[j][4]);
-    readSensor(3,  pos[j], muliDimAns[j][5]);
+    tresholdedValues[0] = readTresholdedSensor(4);
+    tresholdedValues[1] = readTresholdedSensor(3);
+    tresholdedValues[2] = readTresholdedSensor(2);
+    //readSensor(5,  pos[j], muliDimAns[j][3]);
+    //readSensor(4,  pos[j], muliDimAns[j][4]);
+    //readSensor(3,  pos[j], muliDimAns[j][5]);
   }
 
+  printFrontSensorValue(tresholdedValues);
+  
   for(int i = 0; i<6; i++){
     for(int j=0; j<8; j++){
       if(muliDimAns[0][i][j] == muliDimAns[1][i][j]){
@@ -155,13 +160,13 @@ void loop() {
     }
   }
 
-  printSensorValue(8,   muliDimAns[0][0], pos[0]);
+/*  printSensorValue(8,   muliDimAns[0][0], pos[0]);
   printSensorValue(10,  muliDimAns[0][1], pos[1]);
   printSensorValue(51,  muliDimAns[0][2], pos[2]);
   printSensorValue(5,   muliDimAns[0][3], pos[3]);
   printSensorValue(4,   muliDimAns[0][4], pos[4]);
   printSensorValue(3,   muliDimAns[0][5], pos[5]);
-
+*/
   int num = 0;
   int denum = 0;
   
@@ -198,7 +203,7 @@ void loop() {
       }
   }
 
-  Serial.println("\nFiltered");
+/*  Serial.println("\nFiltered");
   for(int i=0; i<44; i++){
     Serial.print(filtered[i]);
     Serial.print(" ");
@@ -207,7 +212,7 @@ void loop() {
   Serial.print("\n\n\n\nCalcuated line pos: ");
   Serial.println(num/(float)denum+0.5);
   Serial.println(timeElapsed);
-  
+*/  
   float linePos=num/(float)denum+0.5;
   
 /*  Serial.println("\n\n");
@@ -255,6 +260,39 @@ void loop() {
    
 }
 
+void print_binary(int number, int num_digits) {
+    int digit;
+    for(digit = num_digits - 1; digit >= 0; digit--) {
+        char msg[8];
+        sprintf(msg, "%c", number & (1 << digit) ? '1' : '0');
+        Serial.print(msg);
+    }
+}
+
+void printFrontSensorValue(byte data[6]){
+  Serial.print("\n\nFront Sensors: ");
+  char msg[8];
+  //sprintf(msg, "%08b",data[0]);
+  print_binary(data[0], 8);
+  Serial.print(' ');
+  print_binary(data[1], 8);
+  Serial.print(' ');
+  print_binary(data[2], 8);
+  Serial.print(' ');
+  print_binary(data[3], 8);
+  Serial.print(' ');
+  print_binary(data[4], 8);
+  Serial.print(' ');
+  print_binary(data[5], 8);
+}
+
+void printTresholdedSensorValue(int boardNum, byte data){
+  Serial.print("\n\nModule: ");
+  Serial.println(boardNum);
+  Serial.print("\t");
+  Serial.print(data, BIN);
+}
+
 void printSensorValue(int boardNum, byte value[8],byte pos[8]){
   Serial.print("\n\nModule: ");
   Serial.println(boardNum);
@@ -274,6 +312,15 @@ void printSensorValue(int boardNum, byte value[8],byte pos[8]){
   }
 
   Serial.print("\n\n");
+}
+
+byte readTresholdedSensor(int boardNum){
+  
+  digitalWrite(boardNum, LOW);
+  delayMicroseconds(delay_us);
+  byte returnValue = SPI.transfer(0xAA);
+  digitalWrite(boardNum, HIGH);
+  return returnValue;
 }
 
 void readSensor(int boardNum, byte *pos, byte *ans){
