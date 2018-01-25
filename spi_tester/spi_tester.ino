@@ -27,10 +27,21 @@
 #include <Servo.h>
 #include <math.h>
 #include <elapsedMillis.h>
+//#include <system_stm32f4xx.c>
+//#include <stm32f4xx_hal.h>
+//#include <stm32f4xx_hal_tim.h>
+//#include <timer.h>
+//#include <HardwareTimer.h>
+//#include "stm32yyxx_hal.c"
 #define _servopin  32
-#define _motorpin  6     
+#define _motorpin  6
+#define magnetic_encoder_cha 33 // PC8
+#define magnetic_encoder_chb 41 // PB1
 Servo servoMotor;
 Servo motorM;
+
+TIM_Encoder_InitTypeDef encoder;
+TIM_HandleTypeDef timer;
 
 float ratioP=30;   // 15 jó egyenesre
 float ratioD=100;   // 100
@@ -56,6 +67,34 @@ const int delay_us = 15;
 const int dataReadyPin = 6;
 const int chipSelectPin = 10;
 
+void encoderSetup() {
+  pinMode(magnetic_encoder_cha, INPUT);
+  pinMode(magnetic_encoder_chb, INPUT);
+  
+ __TIM2_CLK_ENABLE();
+ timer.Instance = TIM3;
+ timer.Init.Period = 0xFFFF;
+ timer.Init.CounterMode = TIM_COUNTERMODE_UP;
+ timer.Init.Prescaler = 0;
+ timer.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
+ 
+ encoder.EncoderMode = TIM_ENCODERMODE_TI12;
+ 
+ encoder.IC1Filter = 0x0F;
+ encoder.IC1Polarity = TIM_INPUTCHANNELPOLARITY_RISING;
+ encoder.IC1Prescaler = TIM_ICPSC_DIV4;
+ encoder.IC1Selection = TIM_ICSELECTION_DIRECTTI;
+ 
+ encoder.IC2Filter = 0x0F;
+ encoder.IC2Polarity = TIM_INPUTCHANNELPOLARITY_FALLING;
+ encoder.IC2Prescaler = TIM_ICPSC_DIV4;
+ encoder.IC2Selection = TIM_ICSELECTION_DIRECTTI;
+
+ HAL_TIM_Encoder_Init(&timer, &encoder);
+ 
+ HAL_TIM_Encoder_Start_IT(&timer,TIM_CHANNEL_1);
+}
+
 void setup() {
   Serial.begin(115200);
   Serial.print("started\n");
@@ -80,6 +119,11 @@ void setup() {
   pinMode(3, OUTPUT);
   pinMode(2,  OUTPUT);
 
+  pinMode(29,  OUTPUT);
+  pinMode(51,  OUTPUT);
+  pinMode(31,  OUTPUT);
+  pinMode(45,  OUTPUT);
+
   
   pinMode(44, OUTPUT);
 
@@ -95,6 +139,7 @@ void setup() {
    motorM.attach(_motorpin);
    motorM.writeMicroseconds(basemotor);
 
+  encoderSetup();
   // give the sensor time to set up:
   delay(4000);
   Serial.println("Loop");
@@ -136,9 +181,12 @@ void loop() {
   byte muliDimAns[3][6][8];
   byte tresholdedValues[6]={0};
   for(int j = 0; j < 3; j++){
-    tresholdedValues[0] = readTresholdedSensor(4);
-    tresholdedValues[1] = readTresholdedSensor(3);
-    tresholdedValues[2] = readTresholdedSensor(2);
+    tresholdedValues[0] = readTresholdedSensor(29);
+    tresholdedValues[1] = readTresholdedSensor(51);
+    tresholdedValues[2] = readTresholdedSensor(31);
+    tresholdedValues[3] = readTresholdedSensor(45);
+    tresholdedValues[4] = readTresholdedSensor(3);
+    tresholdedValues[5] = readTresholdedSensor(2);
     //readSensor(5,  pos[j], muliDimAns[j][3]);
     //readSensor(4,  pos[j], muliDimAns[j][4]);
     //readSensor(3,  pos[j], muliDimAns[j][5]);
@@ -256,8 +304,11 @@ void loop() {
        //servoMotor.writeMicroseconds(base);
        motorM.writeMicroseconds(basemotor);
       }
+  
+  int enc_cnt = __HAL_TIM_GET_COUNTER(&timer);
+  Serial.print("Counter ");
+  Serial.println(enc_cnt);
 
-   
 }
 
 void print_binary(int number, int num_digits) {
