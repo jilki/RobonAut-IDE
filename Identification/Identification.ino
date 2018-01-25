@@ -17,9 +17,12 @@ TIM_Encoder_InitTypeDef encoder;
 TIM_HandleTypeDef timer;
 
 int enc_cnt=0;
+
+
 int basemotor=1500;
-int upperslow=1600;
-int upperfast=1630;
+int upperslow=1700; //////////////////////////////////////////////////////////
+
+
 Servo motorM;
 double tav=0;
 double tav2=0;
@@ -29,6 +32,7 @@ int pulse_count=0;
 elapsedMillis timeElapsed;  
 int prevTime;
 double prevTav = 0;
+int statusUart=0;
 
 const int bt_msg_len = 20;
 
@@ -37,6 +41,7 @@ uint8_t send_buf[bt_msg_len];
 uint16_t uartsize=bt_msg_len-1;
 uint32_t uarttimeout=10000 ;
 uint8_t pData=100;
+uint8_t inBuf[2]={0};
 
 double n=3.1100000000;
 
@@ -147,34 +152,42 @@ void setup() {
 }
 
 void loop() {
-  motorM.writeMicroseconds(upperslow);
-  enc_cnt=__HAL_TIM_GET_COUNTER(&timer);
-  __HAL_TIM_SET_COUNTER(&timer,32767);
-  enc_cnt=enc_cnt-32767;
-  tav=enc_cnt*szorzo;
-  tav2=tav2+tav;
-  int currTime = micros();
-  int diffTime = currTime - prevTime;
-  prevTime = currTime;
-  velo=tav/diffTime*1000000;
-  Serial.print("tav: ");
-  Serial.println(tav2);
-  Serial.println(velo);
-  //Serial.println(diffTime);
-  //Serial.println(currTime);
-  
-  /*
-  Serial.print("count: ");
-  Serial.println(enc_cnt);
-  Serial.println(tav);
-  */
-  
-  String str1=String(diffTime);
-  //String str2=String(velo,8);
-  String str2=String(velo,8);
-  String strSend=str1+","+str2+';'+"\n";
-  //Serial.println(strSend);
-  strSend.toCharArray(buf,bt_msg_len);
-  SendOverBluetooth((uint8_t*)buf);
-  delayMicroseconds(1148);
+
+  statusUart=HAL_UART_Receive(&uart3struct,inBuf,1,60);
+  if(statusUart==HAL_TIMEOUT){
+    motorM.writeMicroseconds(basemotor);
+    Serial.println("leállt");
+  }
+  else{
+    motorM.writeMicroseconds(upperslow);
+    enc_cnt=__HAL_TIM_GET_COUNTER(&timer);
+    __HAL_TIM_SET_COUNTER(&timer,32767);
+    enc_cnt=enc_cnt-32767;
+    tav=enc_cnt*szorzo;
+    tav2=tav2+tav;
+    int currTime = micros();
+    int diffTime = currTime - prevTime;
+    prevTime = currTime;
+    velo=tav/diffTime*1000000;
+    Serial.print("tav: ");
+    //Serial.println(tav2);
+    //Serial.println(velo);
+    //Serial.println(diffTime);
+    //Serial.println(currTime);
+    
+    /*
+    Serial.print("count: ");
+    Serial.println(enc_cnt);
+    Serial.println(tav);
+    */
+    
+    String str1=String(diffTime);
+    //String str2=String(velo,8);
+    String str2=String(velo,8);
+    String strSend=str1+","+str2+';'+"\n";
+    //Serial.println(strSend);
+    strSend.toCharArray(buf,bt_msg_len);
+    SendOverBluetooth((uint8_t*)buf);
+    delayMicroseconds(1150);
+  }
 }
