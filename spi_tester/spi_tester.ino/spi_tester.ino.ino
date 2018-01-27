@@ -27,21 +27,10 @@
 #include <Servo.h>
 #include <math.h>
 #include <elapsedMillis.h>
-//#include <system_stm32f4xx.c>
-//#include <stm32f4xx_hal.h>
-//#include <stm32f4xx_hal_tim.h>
-//#include <timer.h>
-//#include <HardwareTimer.h>
-//#include "stm32yyxx_hal.c"
 #define _servopin  32
-#define _motorpin  6
-#define magnetic_encoder_cha 33 // PC8
-#define magnetic_encoder_chb 41 // PB1
+#define _motorpin  6     
 Servo servoMotor;
 Servo motorM;
-
-TIM_Encoder_InitTypeDef encoder;
-TIM_HandleTypeDef timer;
 
 float ratioP=30;   // 15 jó egyenesre
 float ratioD=100;   // 100
@@ -60,40 +49,12 @@ const int PRESSURE_LSB = 0x20;  //16 least significant bits of pressure
 const int TEMPERATURE = 0x21;   //16 bit temperature reading
 const byte READ = 0b11111100;     // SCP1000's read command
 const byte WRITE = 0b00000010;   // SCP1000's write command
-const int delay_us = 15;
+const int delay_us = 50;
 
 // pins used for the connection with the sensor
 // the other you need are controlled by the SPI library):
 const int dataReadyPin = 6;
 const int chipSelectPin = 10;
-
-void encoderSetup() {
-  pinMode(magnetic_encoder_cha, INPUT);
-  pinMode(magnetic_encoder_chb, INPUT);
-  
- __TIM2_CLK_ENABLE();
- timer.Instance = TIM3;
- timer.Init.Period = 0xFFFF;
- timer.Init.CounterMode = TIM_COUNTERMODE_UP;
- timer.Init.Prescaler = 0;
- timer.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
- 
- encoder.EncoderMode = TIM_ENCODERMODE_TI12;
- 
- encoder.IC1Filter = 0x0F;
- encoder.IC1Polarity = TIM_INPUTCHANNELPOLARITY_RISING;
- encoder.IC1Prescaler = TIM_ICPSC_DIV4;
- encoder.IC1Selection = TIM_ICSELECTION_DIRECTTI;
- 
- encoder.IC2Filter = 0x0F;
- encoder.IC2Polarity = TIM_INPUTCHANNELPOLARITY_FALLING;
- encoder.IC2Prescaler = TIM_ICPSC_DIV4;
- encoder.IC2Selection = TIM_ICSELECTION_DIRECTTI;
-
- HAL_TIM_Encoder_Init(&timer, &encoder);
- 
- HAL_TIM_Encoder_Start_IT(&timer,TIM_CHANNEL_1);
-}
 
 void setup() {
   Serial.begin(115200);
@@ -110,8 +71,7 @@ void setup() {
   
   pinMode(8,  OUTPUT);
 
-  pinMode(10, OUTPUT);    
-  pinMode(51, OUTPUT);
+  pinMode(10, OUTPUT);
   pinMode(5, OUTPUT);
 
   
@@ -119,11 +79,11 @@ void setup() {
   pinMode(3, OUTPUT);
   pinMode(2,  OUTPUT);
 
-  pinMode(29,  OUTPUT);
-  pinMode(51,  OUTPUT);
-  pinMode(31,  OUTPUT);
-  pinMode(45,  OUTPUT);
 
+  pinMode(45,  OUTPUT); 
+  pinMode(31,  OUTPUT);
+  pinMode(51,  OUTPUT);
+  pinMode(29,  OUTPUT);
   
   pinMode(44, OUTPUT);
 
@@ -139,7 +99,6 @@ void setup() {
    motorM.attach(_motorpin);
    motorM.writeMicroseconds(basemotor);
 
-  encoderSetup();
   // give the sensor time to set up:
   delay(4000);
   Serial.println("Loop");
@@ -179,21 +138,28 @@ void loop() {
   //readSensor(4,  pos[3], ans[3]);
 
   byte muliDimAns[3][6][8];
-  byte tresholdedValues[6]={0};
-  for(int j = 0; j < 3; j++){
-    tresholdedValues[0] = readTresholdedSensor(29);
-    tresholdedValues[1] = readTresholdedSensor(51);
-    tresholdedValues[2] = readTresholdedSensor(31);
-    tresholdedValues[3] = readTresholdedSensor(45);
-    tresholdedValues[4] = readTresholdedSensor(3);
-    tresholdedValues[5] = readTresholdedSensor(2);
-    //readSensor(5,  pos[j], muliDimAns[j][3]);
-    //readSensor(4,  pos[j], muliDimAns[j][4]);
-    //readSensor(3,  pos[j], muliDimAns[j][5]);
-  }
+  byte tresholdedValues[10]={0};
+  //for(int j = 0; j < 3; j++){
+   
+    
+    tresholdedValues[0] = readTresholdedSensor(2);
+    tresholdedValues[1] = readTresholdedSensor(3);
+    tresholdedValues[2] = readTresholdedSensor(4);
+    tresholdedValues[3] = readTresholdedSensor(5);
+    tresholdedValues[4] = readTresholdedSensor(8);
+    tresholdedValues[5] = readTresholdedSensor(10);
+
+    
+    tresholdedValues[6] = readTresholdedSensor(29);
+    tresholdedValues[7] = readTresholdedSensor(51);
+    tresholdedValues[8] = readTresholdedSensor(31);
+    tresholdedValues[9] = readTresholdedSensor(45);
+    
+  //}
 
   printFrontSensorValue(tresholdedValues);
   
+  /*
   for(int i = 0; i<6; i++){
     for(int j=0; j<8; j++){
       if(muliDimAns[0][i][j] == muliDimAns[1][i][j]){
@@ -207,6 +173,7 @@ void loop() {
       }
     }
   }
+*/
 
 /*  printSensorValue(8,   muliDimAns[0][0], pos[0]);
   printSensorValue(10,  muliDimAns[0][1], pos[1]);
@@ -304,11 +271,8 @@ void loop() {
        //servoMotor.writeMicroseconds(base);
        motorM.writeMicroseconds(basemotor);
       }
-  
-  int enc_cnt = __HAL_TIM_GET_COUNTER(&timer);
-  Serial.print("Counter ");
-  Serial.println(enc_cnt);
 
+   
 }
 
 void print_binary(int number, int num_digits) {
@@ -320,7 +284,7 @@ void print_binary(int number, int num_digits) {
     }
 }
 
-void printFrontSensorValue(byte data[6]){
+void printFrontSensorValue(byte data[10]){
   Serial.print("\n\nFront Sensors: ");
   char msg[8];
   //sprintf(msg, "%08b",data[0]);
@@ -335,6 +299,14 @@ void printFrontSensorValue(byte data[6]){
   print_binary(data[4], 8);
   Serial.print(' ');
   print_binary(data[5], 8);
+   Serial.print(' ');
+  print_binary(data[6], 8);
+  Serial.print(' ');
+  print_binary(data[7], 8);
+  Serial.print(' ');
+  print_binary(data[8], 8);
+  Serial.print(' ');
+  print_binary(data[9], 8);
 }
 
 void printTresholdedSensorValue(int boardNum, byte data){
@@ -370,6 +342,7 @@ byte readTresholdedSensor(int boardNum){
   digitalWrite(boardNum, LOW);
   delayMicroseconds(delay_us);
   byte returnValue = SPI.transfer(0xAA);
+  delayMicroseconds(delay_us);  //////////////////////////////
   digitalWrite(boardNum, HIGH);
   return returnValue;
 }
