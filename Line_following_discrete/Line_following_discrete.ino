@@ -16,6 +16,14 @@ int basemotor=1500;
 int upper=1610;
 float linePosold=0;
 float oldPos = 0;
+float linePosFront=0;
+float linePosBack=0;
+
+uint8_t frontSensorPos[48]={0};
+int denumFront=0;
+int numFront=0;
+int denumBack=0;
+int numBack=0;
 
 elapsedMillis timeElapsed;
 
@@ -45,7 +53,8 @@ void printFrontSensorValue(byte data[10]){
   print_binary(data[4], 8);
   Serial.print(' ');
   print_binary(data[5], 8);
-   Serial.print(' ');
+   Serial.println(' ');
+  Serial.print("Back Sensors: ");
   print_binary(data[6], 8);
   Serial.print(' ');
   print_binary(data[7], 8);
@@ -62,27 +71,6 @@ void printTresholdedSensorValue(int boardNum, byte data){
   Serial.print(data, BIN);
 }
 
-void printSensorValue(int boardNum, byte value[8],byte pos[8]){
-  Serial.print("\n\nModule: ");
-  Serial.println(boardNum);
-
-  for(int i = 0; i < 8; i++){
-    Serial.print(value[i], DEC);
-    Serial.print("\t");
-  }
-
-
-  Serial.print("\nPos: ");
-  for(int i = 0; i < 4; i++){
-    Serial.print(pos[(i*2)], DEC);
-    Serial.print(": ");
-    Serial.print(pos[(i*2)+1], DEC);
-    Serial.print("\t");
-  }
-
-  Serial.print("\n\n");
-}
-
 byte readTresholdedSensor(int boardNum){
   
   digitalWrite(boardNum, LOW);
@@ -93,27 +81,6 @@ byte readTresholdedSensor(int boardNum){
   return returnValue;
 }
 
-void readSensor(int boardNum, byte *pos, byte *ans){
-  
-  for(int i = 0; i < 8; i++)
-  {
-    digitalWrite(boardNum, LOW);
-    delayMicroseconds(delay_us);
-  
-    pos[i] = SPI.transfer(7-i);
-    delayMicroseconds(delay_us);
-    if(pos[i]!=227){
-        pos[i] = SPI.transfer(7-i);
-        delayMicroseconds(delay_us);
-    }
-    ans[i] = SPI.transfer(0xAA);
-    digitalWrite(boardNum, HIGH);
-    delayMicroseconds(delay_us);
-    if(ans[i]==227)
-      i--;
-  } 
-}
-
 void setup() {
   Serial.begin(115200);
   Serial.print("started\n");
@@ -122,28 +89,26 @@ void setup() {
   SPI.begin();
   SPI.beginTransaction(SPISettings(1000000, MSBFIRST, SPI_MODE1));
   
-  pinMode(8,  OUTPUT);
-
+  pinMode(8,  OUTPUT); // Front Chipselects
   pinMode(10, OUTPUT);
   pinMode(5, OUTPUT);
-
-  
   pinMode(4,  OUTPUT);
   pinMode(3, OUTPUT);
   pinMode(2,  OUTPUT);
 
 
-  pinMode(45,  OUTPUT); 
+  pinMode(45,  OUTPUT); //Back chip selects
   pinMode(31,  OUTPUT);
   pinMode(51,  OUTPUT);
   pinMode(29,  OUTPUT);
   
-  pinMode(44, OUTPUT);
+  pinMode(44, OUTPUT);  //Interrupt
 
-   servoMotor.attach(_servopin);
-   servoMotor.writeMicroseconds(baseservo);
-   motorM.attach(_motorpin);
-   motorM.writeMicroseconds(basemotor);
+
+  servoMotor.attach(_servopin);
+  servoMotor.writeMicroseconds(baseservo);
+  motorM.attach(_motorpin);
+  motorM.writeMicroseconds(basemotor);
 
   // give the motor time to set up:
   delay(4000);
@@ -151,41 +116,78 @@ void setup() {
 }
 
 void loop() {
-      
+
+  //Send interrupt
   digitalWrite(44,HIGH);
   delay(1);
   digitalWrite(44,LOW);
   delay(5);
 
-  byte tresholdedValues[10]={0};
-  //for(int j = 0; j < 3; j++){
-   
+  byte tresholdedValues[10]={0};  
     
-    tresholdedValues[0] = readTresholdedSensor(2);
-    tresholdedValues[1] = readTresholdedSensor(3);
-    tresholdedValues[2] = readTresholdedSensor(4);
-    tresholdedValues[3] = readTresholdedSensor(5);
-    tresholdedValues[4] = readTresholdedSensor(8);
-    tresholdedValues[5] = readTresholdedSensor(10);
+  tresholdedValues[0] = readTresholdedSensor(2);
+  tresholdedValues[1] = readTresholdedSensor(3);
+  tresholdedValues[2] = readTresholdedSensor(4);
+  tresholdedValues[3] = readTresholdedSensor(5);
+  tresholdedValues[4] = readTresholdedSensor(8);
+  tresholdedValues[5] = readTresholdedSensor(10);
 
-    
-    tresholdedValues[6] = readTresholdedSensor(29);
-    tresholdedValues[7] = readTresholdedSensor(51);
-    tresholdedValues[8] = readTresholdedSensor(31);
-    tresholdedValues[9] = readTresholdedSensor(45);
-    
-  //}
-
-  printFrontSensorValue(tresholdedValues);
   
+  tresholdedValues[6] = readTresholdedSensor(29);
+  tresholdedValues[7] = readTresholdedSensor(51);
+  tresholdedValues[8] = readTresholdedSensor(31);
+  tresholdedValues[9] = readTresholdedSensor(45);
 
 
-
-  int num = 0;
-  int denum = 0;
-
-  float linePos=num/(float)denum+0.5;
+//  printFrontSensorValue(tresholdedValues);
+// Serial.println("");
+  denumFront=0;
+  numFront=0;
   
+  for(int i=0; i<6; i++){
+    for(int j=0; j<8; j++){
+      frontSensorPos[i*8+j]=((tresholdedValues[i])<<j);
+      frontSensorPos[i*8+j]=frontSensorPos[i*8+j]>>7;
+      if(frontSensorPos[i*8+j]==0){
+        denumFront++;
+        numFront=numFront+i*8+j;
+      }
+    }
+  }
+
+  denumBack=0;
+  numBack=0;
+  
+  uint8_t backSensorPos[32]={0};
+  for(int i=6; i<10; i++){
+    for(int j=0; j<8; j++){
+      backSensorPos[(i-6)*8+j]=((tresholdedValues[i])<<j);
+      backSensorPos[(i-6)*8+j]=backSensorPos[(i-6)*8+j]>>7;
+      if(backSensorPos[(i-6)*8+j]==0){
+        denumBack++;
+        numBack=numBack+(i-6)*8+j;
+      }
+    }
+  }
+/* for(int i=0; i<48; i++){
+     Serial.print(frontSensorPos[i]);
+   }
+    Serial.println("");
+  */
+/*
+  for(int i=0; i<32; i++){
+     Serial.print(backSensorPos[i]);
+  }
+  Serial.println("");
+*/
+  Serial.println(timeElapsed);
+
+  linePosFront=(float)numFront/denumFront;
+  linePosBack=(float)numBack/denumBack;
+  
+  Serial.println(linePosFront);
+  Serial.println(linePosBack);
+  /*
   if(!isnan(linePos))
   {
     float diff = linePos-linePosold;
@@ -212,6 +214,7 @@ void loop() {
        //servoMotor.writeMicroseconds(base);
        motorM.writeMicroseconds(basemotor);
       }
+      */
 }
 
 
