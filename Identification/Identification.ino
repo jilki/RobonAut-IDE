@@ -138,7 +138,6 @@ void encoderSetup() {
 void setup() {
   Serial.begin(115200);
   Serial.println("Started");
-
   motorM.attach(_motorpin);
   motorM.writeMicroseconds(basemotor);
 
@@ -159,6 +158,7 @@ void loop() {
     Serial.println("leállt");
   }
   else{
+  
     motorM.writeMicroseconds(upperslow);
     enc_cnt=__HAL_TIM_GET_COUNTER(&timer);
     __HAL_TIM_SET_COUNTER(&timer,32767);
