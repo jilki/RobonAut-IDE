@@ -42,6 +42,7 @@ double prevTav = 0;
 int baseservo=1500;
 int upper=1610;
 
+//Line meas
 float linePosFront=0;
 float linePosBack=0;
 float orient=0;
@@ -52,7 +53,12 @@ int denumFront=0;
 int numFront=0;
 int denumBack=0;
 int numBack=0;
+int forDifference[48]={0};
+int vonalSzam=0;
+//Állapotokhoz
+int toDroneState=0;
 
+//State-space controller
 double kszi=sqrt(2)/2;
 double d5=0;
 double t5=1;
@@ -242,11 +248,42 @@ void loop() {
       frontSensorPos[i*8+j]=((tresholdedValues[i])<<j);
       frontSensorPos[i*8+j]=frontSensorPos[i*8+j]>>7;
       if(frontSensorPos[i*8+j]==0){
+        forDifference[denumFront]=i*8+j;
         denumFront++;
         numFront=numFront+i*8+j;
       }
     }
   }
+
+  
+  vonalSzam=1;
+  for(int i=0; i<denumFront-1; i++){
+    if((forDifference[i+1]-forDifference[i])>1){
+      vonalSzam++;
+    }
+  }
+  if(denumFront==0){
+    vonalSzam=0;
+  }
+  Serial.println(vonalSzam);
+
+  
+  if(vonalSzam==3){
+    toDroneState++;
+  }
+  
+  if(vonalSzam==0){
+    
+  }
+  if(vonalSzam==2){
+    
+  }
+  
+
+  if(toDroneState>15){
+    //Lépjünk be a drone állapotba
+  }
+  
 
   denumBack=0;
   numBack=0;
@@ -262,10 +299,13 @@ void loop() {
       }
     }
   }
-
+  
+if(vonalSzam!=0){
   linePosFront=(((float)numFront/denumFront)-23.5)*0.006;
   linePosBack=(((float)numBack/denumBack)-15.5)*0.006;
   orient=atan((linePosFront-linePosBack)/Lsensor);
+}
+
 /*
   Serial.println(linePosFront, 8);
   Serial.println(linePosBack, 8);
@@ -285,7 +325,7 @@ void loop() {
   int diffTime = currTime - prevTime;
   prevTime = currTime;
   velo=tav/diffTime*1000000;
-  Serial.println(velo);
+  //Serial.println(velo);
 
   if(velo==0){
     velo=0.0000000001;
