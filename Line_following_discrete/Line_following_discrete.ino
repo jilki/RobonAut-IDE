@@ -4,7 +4,7 @@
 #include <math.h>
 #include <elapsedMillis.h>
 #define _servopin  32 //PC9
-#define _motorpin  6   
+#define _motorpin  7  //PA8
 #define magnetic_encoder_cha (uint16_t)1<<6 // PC6  Föld melletti  CHB
 #define magnetic_encoder_chb (uint16_t)1<<5 // PB5  5V melletti  CHA  
 Servo servoMotor;
@@ -13,6 +13,24 @@ Servo motorM;
 TIM_Encoder_InitTypeDef encoder;
 TIM_HandleTypeDef timer;
 
+//Motor_Controller
+int basemotor=1500;
+
+int motorFord=1500;
+double Kc=1;//0.6158
+double zd=0.9678;
+
+double u1=0;
+double u2=0;
+double u=0;
+double u2past=0;
+double upast=0;
+
+double alap=1;////////////////////////////////////////////Use this to set velocity in m/s
+double beta=65.848;
+double alfa=0.0422;
+
+//Velocity meas with encoder
 int enc_cnt=0;
 double tav=0;
 double tav2=0;
@@ -22,7 +40,6 @@ int prevTime;
 double prevTav = 0;
 
 int baseservo=1500;
-int basemotor=1500;
 int upper=1610;
 
 float linePosFront=0;
@@ -159,17 +176,17 @@ void setup() {
   SPI.begin();
   SPI.beginTransaction(SPISettings(1000000, MSBFIRST, SPI_MODE1));
   encoderSetup();
-  pinMode(8,  OUTPUT); // Front Chipselects
-  pinMode(10, OUTPUT);
+  pinMode(8,  OUTPUT); // Front Chipselects Threshold: 0x8000
+  pinMode(10, OUTPUT);  
   pinMode(5, OUTPUT);
   pinMode(14,  OUTPUT);
   pinMode(3, OUTPUT);
   pinMode(2,  OUTPUT);
 
 
-  pinMode(45,  OUTPUT); //Back chip selects
+  pinMode(45,  OUTPUT); //Back chip selects Threshold: 0xA000
   pinMode(31,  OUTPUT);
-  pinMode(51,  OUTPUT);
+  pinMode(51,  OUTPUT); //B000
   pinMode(29,  OUTPUT);
   
   pinMode(44, OUTPUT);  //Interrupt
@@ -177,8 +194,8 @@ void setup() {
 
   servoMotor.attach(_servopin);
   servoMotor.writeMicroseconds(baseservo);
-  //motorM.attach(_motorpin);
- // motorM.writeMicroseconds(basemotor);
+  motorM.attach(_motorpin);
+  motorM.writeMicroseconds(basemotor);
 
   // give the motor time to set up:
   delay(4000);
@@ -190,7 +207,9 @@ void setup() {
 }
 
 void loop() {
-
+/*============================================
+  =           Line position read             =
+  ============================================*/
   //Send interrupt
   digitalWrite(44,HIGH);
   delay(1);
@@ -243,30 +262,20 @@ void loop() {
       }
     }
   }
-/* for(int i=0; i<48; i++){
-     Serial.print(frontSensorPos[i]);
-   }
-    Serial.println("");
-  */
-/*
-  for(int i=0; i<32; i++){
-     Serial.print(backSensorPos[i]);
-  }
-  Serial.println("");
-*/
- 
-  
-  Serial.println(timeElapsed);
 
   linePosFront=(((float)numFront/denumFront)-23.5)*0.006;
   linePosBack=(((float)numBack/denumBack)-15.5)*0.006;
   orient=atan((linePosFront-linePosBack)/Lsensor);
-
+/*
   Serial.println(linePosFront, 8);
   Serial.println(linePosBack, 8);
   Serial.print("Orient: ");
   Serial.println(orient*180/PI);
+*/
 
+/*============================================
+  =          Velocity measurement            =
+  ============================================*/
   enc_cnt=__HAL_TIM_GET_COUNTER(&timer);
   __HAL_TIM_SET_COUNTER(&timer,32767);
   enc_cnt=enc_cnt-32767;
@@ -276,11 +285,34 @@ void loop() {
   int diffTime = currTime - prevTime;
   prevTime = currTime;
   velo=tav/diffTime*1000000;
+  Serial.println(velo);
 
   if(velo==0){
     velo=0.0000000001;
   
   }
+  
+/*============================================
+  =          PI velocity controller          =
+  ============================================*/
+   u2=zd*u2past+(1-zd)*upast;
+   u1=Kc*(alap-velo);
+   u=(u1+u2);
+   if(u>6)
+    u=6;
+   motorFord=(u+beta)/alfa;
+   /*
+   Serial.println(motorFord);
+   Serial.println(velo);
+   */
+   motorM.writeMicroseconds(motorFord);
+   u2past=u2;
+   upast=u; 
+
+/*============================================
+  =      State-space line following          =
+  ============================================*/
+  //
   d5=0.5*velo+0.5;
   t5=d5/velo;
   Ttime=(t5*kszi)/3;
@@ -289,11 +321,12 @@ void loop() {
   kp=-(Lvesszo/(velo*velo))*s1s2;
   kd=(Lvesszo/velo)*((s1pluss2)-velo*kp);
   uszog=-(-kd*orient-kp*linePosFront)/PI*180;
-
+/*
   Serial.print("Bemeno szög: ");
   Serial.println(uszog);
-
+*/
   if(uszog>27){
+    
     pwmbe=1000;
   }
   if(uszog<-26.876){
@@ -308,10 +341,12 @@ void loop() {
   if(uszog<=-20.125 && uszog>=-26.876){
     pwmbe=718281.2226+123156.6653*uszog+7911.076957*uszog*uszog+225.1145702*uszog*uszog*uszog+2.39507239*uszog*uszog*uszog*uszog;
   }
+ /*
   Serial.print("pwmbe: ");
   Serial.println(pwmbe);
+  */
   servoMotor.writeMicroseconds(pwmbe);
-  delay(11);
+  delay(13);
 }
 
 
