@@ -54,7 +54,14 @@ int numFront=0;
 int denumBack=0;
 int numBack=0;
 int forDifference[48]={0};
-int vonalSzam=0;
+int vonalSzam=1;
+int prevVonalSzam=1;
+double tavok[3]={0};
+double temp=0;
+int vonalFajta[3]={0};
+int counterTav=0;
+double tulHosszu=0.2;
+
 //Állapotokhoz
 int toDroneState=0;
 
@@ -255,7 +262,6 @@ void loop() {
     }
   }
 
-  
   vonalSzam=1;
   for(int i=0; i<denumFront-1; i++){
     if((forDifference[i+1]-forDifference[i])>1){
@@ -265,19 +271,40 @@ void loop() {
   if(denumFront==0){
     vonalSzam=0;
   }
-  Serial.println(vonalSzam);
+
+
+//Vonalszam vizsgalat
+  if((tav2-temp)>tulHosszu){
+    counterTav=0;
+  }
+
+  if((vonalSzam-prevVonalSzam)!=0 && vonalSzam != 3){
+    if(counterTav==0){
+      temp=tav2;
+    }
+    if(counterTav!=0){
+      tavok[prevVonalSzam]=tav2-temp;
+      temp=tav2;
+    }
+    counterTav++;
+  }
+  if(counterTav==3){
+    counterTav=0;
+    if(tavok[2]<=0.01){
+      Serial.println("Körforgalom");
+    }
+    if(tavok[0]<=0.01){
+      Serial.println("Hordo");
+    }
+  }
+  
+  //Serial.println(vonalSzam);
 
   
   if(vonalSzam==3){
     toDroneState++;
   }
-  
-  if(vonalSzam==0){
-    
-  }
-  if(vonalSzam==2){
-    
-  }
+
   
 
   if(toDroneState>15){
@@ -386,6 +413,7 @@ if(vonalSzam!=0){
   Serial.println(pwmbe);
   */
   servoMotor.writeMicroseconds(pwmbe);
+  prevVonalSzam=vonalSzam;
   delay(13);
 }
 
