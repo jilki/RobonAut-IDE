@@ -39,10 +39,18 @@ double szorzo=0;
 int prevTime;
 double prevTav = 0;
 
+double tavFin=0;
+double tavFin2=0;
+
+float tav_dron_pre=0;
+float tav_dron=0;
+int i_dron=0;
+
 int baseservo=1500;
 int upper=1610;
 
 //Line meas
+byte tresholdedValues[10]={0};
 float linePosFront=0;
 float linePosBack=0;
 float orient=0;
@@ -63,7 +71,19 @@ int counterTav=0;
 double tulHosszu=0.2;
 
 //Állapotokhoz
-int toDroneState=0;
+char state=0;
+//0: akadályok között, keresés;
+//1: Drón
+//2: Sarok
+//3: Konvoj
+//4: Vasút
+//5: Hordó
+//6: Körforgalom
+//7: Cél
+int dronWas=0;
+int counterDron=0;
+int infraDron=0;
+int diffInfraDron=0;
 
 //State-space controller
 double kszi=sqrt(2)/2;
@@ -80,6 +100,7 @@ int pwmbe=1500;
 elapsedMillis timeElapsed;
 
 const int delay_us = 50;
+
 
 void print_binary(int number, int num_digits) {
     int digit;
@@ -131,6 +152,333 @@ byte readTresholdedSensor(int boardNum){
   delayMicroseconds(delay_us);  //////////////////////////////
   digitalWrite(boardNum, HIGH);
   return returnValue;
+}
+
+void handleFinish(){
+  /*enc_cnt=__HAL_TIM_GET_COUNTER(&timer);
+  __HAL_TIM_SET_COUNTER(&timer,32767);
+  enc_cnt=enc_cnt-32767;
+  tavFin=enc_cnt*szorzo;
+  tavFin2=tavFin2+tavFin;*/
+    servoMotor.writeMicroseconds(basemotor);
+    motorM.writeMicroseconds(1300);
+    
+}
+
+void handleDron(){
+  dronWas=1;
+  Serial.println("beleptem dron");
+  if(velo>0.0000000001){
+    motorM.writeMicroseconds(1300);
+    //Send interrupt
+    digitalWrite(44,HIGH);
+    delay(1);
+    digitalWrite(44,LOW);
+    delay(5);
+  
+    tresholdedValues[0] = readTresholdedSensor(2);
+    tresholdedValues[1] = readTresholdedSensor(3);
+    tresholdedValues[2] = readTresholdedSensor(14);
+    tresholdedValues[3] = readTresholdedSensor(5);
+    tresholdedValues[4] = readTresholdedSensor(8);
+    tresholdedValues[5] = readTresholdedSensor(10);
+  
+    
+    tresholdedValues[6] = readTresholdedSensor(29);
+    tresholdedValues[7] = readTresholdedSensor(51);
+    tresholdedValues[8] = readTresholdedSensor(31);
+    tresholdedValues[9] = readTresholdedSensor(45);
+  
+  
+  // printFrontSensorValue(tresholdedValues);
+  // Serial.println("");
+    denumFront=0;
+    numFront=0;
+    
+    for(int i=0; i<6; i++){
+      for(int j=0; j<8; j++){
+        frontSensorPos[i*8+j]=((tresholdedValues[i])<<j);
+        frontSensorPos[i*8+j]=frontSensorPos[i*8+j]>>7;
+        if(frontSensorPos[i*8+j]==0){
+          forDifference[denumFront]=i*8+j;
+          denumFront++;
+          numFront=numFront+i*8+j;
+        }
+      }
+    }
+  
+    denumBack=0;
+    numBack=0;
+    
+    uint8_t backSensorPos[32]={0};
+    for(int i=6; i<10; i++){
+      for(int j=0; j<8; j++){
+        backSensorPos[(i-6)*8+j]=((tresholdedValues[i])<<j);
+        backSensorPos[(i-6)*8+j]=backSensorPos[(i-6)*8+j]>>7;
+        if(backSensorPos[(i-6)*8+j]==0){
+          denumBack++;
+          numBack=numBack+(i-6)*8+j;
+        }
+      }
+    }
+  
+    linePosFront=(((float)numFront/denumFront)-23.5)*0.006;
+    linePosBack=(((float)numBack/denumBack)-15.5)*0.006;
+    orient=atan((linePosFront-linePosBack)/Lsensor);
+  
+    /*============================================
+    =          Velocity measurement            =
+    ============================================*/
+    enc_cnt=__HAL_TIM_GET_COUNTER(&timer);
+    __HAL_TIM_SET_COUNTER(&timer,32767);
+    enc_cnt=enc_cnt-32767;
+    tav=enc_cnt*szorzo;
+    tav2=tav2+tav;
+    int currTime = micros();
+    int diffTime = currTime - prevTime;
+    prevTime = currTime;
+    velo=tav/diffTime*1000000;
+    Serial.println(tav2);
+    //Serial.println(velo);
+  
+    if(velo==0){
+      velo=0.0000000001;
+    
+    }
+  
+  
+    /*============================================
+    =      State-space line following          =
+    ============================================*/
+    //
+    d5=0.5*velo+0.5;
+    t5=d5/velo;
+    Ttime=(t5*kszi)/3;
+    s1s2=(1/(Ttime*Ttime));
+    s1pluss2=-2*kszi*(1/Ttime);
+    kp=-(Lvesszo/(velo*velo))*s1s2;
+    kd=(Lvesszo/velo)*((s1pluss2)-velo*kp);
+    uszog=-(-kd*orient-kp*linePosFront)/PI*180;
+  /*
+    Serial.print("Bemeno szög: ");
+    Serial.println(uszog);
+  */
+    if(uszog>27){
+      
+      pwmbe=1000;
+    }
+    if(uszog<-26.876){
+      pwmbe=2100;
+    }
+    if(uszog<=27 && uszog>=19){
+      pwmbe=-614282.3652+107000.859*uszog-6935.889922*uszog*uszog+198.807768*uszog*uszog*uszog-2.127440683*uszog*uszog*uszog*uszog;
+    }
+    if(uszog<19 && uszog >-20.125){
+      pwmbe=1530.583548-15.34430827*uszog;
+    }
+    if(uszog<=-20.125 && uszog>=-26.876){
+      pwmbe=718281.2226+123156.6653*uszog+7911.076957*uszog*uszog+225.1145702*uszog*uszog*uszog+2.39507239*uszog*uszog*uszog*uszog;
+    }
+   /*
+    Serial.print("pwmbe: ");
+    Serial.println(pwmbe);
+    */
+    servoMotor.writeMicroseconds(pwmbe);
+  }
+
+  if(velo<0.001){
+    /*
+    Serial.print("Analog");
+    Serial.println(analogRead(46));
+    */
+    if(counterDron==0){
+      infraDron=analogRead(46);
+      /*
+      Serial.print("InfraDron");
+      Serial.println(infraDron);
+      */
+      counterDron=1;
+    } 
+    else{
+        diffInfraDron=infraDron-analogRead(46);
+      if((diffInfraDron)>100){
+        /*
+        Serial.print("Diff infra: ");
+        Serial.println(diffInfraDron);
+        */
+        delay(2100);
+        state=0;
+      }
+    }
+  }
+}
+
+void lineFollowing(){
+
+  //Send interrupt
+  digitalWrite(44,HIGH);
+  delay(1);
+  digitalWrite(44,LOW);
+  delay(5);
+
+  tresholdedValues[0] = readTresholdedSensor(2);
+  tresholdedValues[1] = readTresholdedSensor(3);
+  tresholdedValues[2] = readTresholdedSensor(14);
+  tresholdedValues[3] = readTresholdedSensor(5);
+  tresholdedValues[4] = readTresholdedSensor(8);
+  tresholdedValues[5] = readTresholdedSensor(10);
+
+  
+  tresholdedValues[6] = readTresholdedSensor(29);
+  tresholdedValues[7] = readTresholdedSensor(51);
+  tresholdedValues[8] = readTresholdedSensor(31);
+  tresholdedValues[9] = readTresholdedSensor(45);
+
+
+// printFrontSensorValue(tresholdedValues);
+// Serial.println("");
+  denumFront=0;
+  numFront=0;
+  
+  for(int i=0; i<6; i++){
+    for(int j=0; j<8; j++){
+      frontSensorPos[i*8+j]=((tresholdedValues[i])<<j);
+      frontSensorPos[i*8+j]=frontSensorPos[i*8+j]>>7;
+      if(frontSensorPos[i*8+j]==0){
+        forDifference[denumFront]=i*8+j;
+        denumFront++;
+        numFront=numFront+i*8+j;
+      }
+    }
+  }
+
+  vonalSzam=1;
+  for(int i=0; i<denumFront-1; i++){
+    if((forDifference[i+1]-forDifference[i])>1){
+      vonalSzam++;
+    }
+  }
+  if(denumFront==0){
+    vonalSzam=0;
+  }
+  
+  //Dron -->1
+  if(vonalSzam==3 && dronWas==0)
+  { 
+    if(i_dron==0){tav_dron_pre=tav2;i_dron=1;}
+    tav_dron=tav_dron+tav2-tav_dron_pre;
+    tav_dron_pre=tav2;
+    Serial.print("Dron tav: " );
+    Serial.println(tav_dron, 6);
+    if(tav_dron>=0.1)state=1;
+  }
+  
+  //Cel -->7
+  if (denumFront>15){
+    //Cél jön
+    state=7;
+  }
+  
+  denumBack=0;
+  numBack=0;
+  
+  uint8_t backSensorPos[32]={0};
+  for(int i=6; i<10; i++){
+    for(int j=0; j<8; j++){
+      backSensorPos[(i-6)*8+j]=((tresholdedValues[i])<<j);
+      backSensorPos[(i-6)*8+j]=backSensorPos[(i-6)*8+j]>>7;
+      if(backSensorPos[(i-6)*8+j]==0){
+        denumBack++;
+        numBack=numBack+(i-6)*8+j;
+      }
+    }
+  }
+
+  linePosFront=(((float)numFront/denumFront)-23.5)*0.006;
+  linePosBack=(((float)numBack/denumBack)-15.5)*0.006;
+  orient=atan((linePosFront-linePosBack)/Lsensor);
+
+/*
+  Serial.println(linePosFront, 8);
+  Serial.println(linePosBack, 8);
+  Serial.print("Orient: ");
+  Serial.println(orient*180/PI);
+*/
+
+/*============================================
+  =          Velocity measurement            =
+  ============================================*/
+  enc_cnt=__HAL_TIM_GET_COUNTER(&timer);
+  __HAL_TIM_SET_COUNTER(&timer,32767);
+  enc_cnt=enc_cnt-32767;
+  tav=enc_cnt*szorzo;
+  tav2=tav2+tav;
+  int currTime = micros();
+  int diffTime = currTime - prevTime;
+  prevTime = currTime;
+  velo=tav/diffTime*1000000;
+  Serial.println(tav2);
+  //Serial.println(velo);
+
+  if(velo==0){
+    velo=0.0000000001;
+  
+  }
+  
+/*============================================
+  =          PI velocity controller          =
+  ============================================*/
+   u2=zd*u2past+(1-zd)*upast;
+   u1=Kc*(alap-velo);
+   u=(u1+u2);
+   if(u>6)
+    u=6;
+   motorFord=(u+beta)/alfa;
+   /*
+   Serial.println(motorFord);
+   Serial.println(velo);
+   */
+   motorM.writeMicroseconds(motorFord);
+   u2past=u2;
+   upast=u; 
+
+/*============================================
+  =      State-space line following          =
+  ============================================*/
+  //
+  d5=0.5*velo+0.5;
+  t5=d5/velo;
+  Ttime=(t5*kszi)/3;
+  s1s2=(1/(Ttime*Ttime));
+  s1pluss2=-2*kszi*(1/Ttime);
+  kp=-(Lvesszo/(velo*velo))*s1s2;
+  kd=(Lvesszo/velo)*((s1pluss2)-velo*kp);
+  uszog=-(-kd*orient-kp*linePosFront)/PI*180;
+/*
+  Serial.print("Bemeno szög: ");
+  Serial.println(uszog);
+*/
+  if(uszog>27){
+    
+    pwmbe=1000;
+  }
+  if(uszog<-26.876){
+    pwmbe=2100;
+  }
+  if(uszog<=27 && uszog>=19){
+    pwmbe=-614282.3652+107000.859*uszog-6935.889922*uszog*uszog+198.807768*uszog*uszog*uszog-2.127440683*uszog*uszog*uszog*uszog;
+  }
+  if(uszog<19 && uszog >-20.125){
+    pwmbe=1530.583548-15.34430827*uszog;
+  }
+  if(uszog<=-20.125 && uszog>=-26.876){
+    pwmbe=718281.2226+123156.6653*uszog+7911.076957*uszog*uszog+225.1145702*uszog*uszog*uszog+2.39507239*uszog*uszog*uszog*uszog;
+  }
+ /*
+  Serial.print("pwmbe: ");
+  Serial.println(pwmbe);
+  */
+  servoMotor.writeMicroseconds(pwmbe);
 }
 
 void encoderSetup() {
@@ -211,7 +559,7 @@ void setup() {
   motorM.writeMicroseconds(basemotor);
 
   // give the motor time to set up:
-  delay(4000);
+  delay(2000);
   Serial.println("Loop");
   szorzo=(100*PI/(((48*38)/(13*13))*256))/1000;
   __HAL_TIM_SET_COUNTER(&timer,32767);
@@ -223,57 +571,40 @@ void loop() {
 /*============================================
   =           Line position read             =
   ============================================*/
-  //Send interrupt
-  digitalWrite(44,HIGH);
-  delay(1);
-  digitalWrite(44,LOW);
-  delay(5);
+  
 
-  byte tresholdedValues[10]={0};  
+  
+  switch (state){
+    case 0:
+    lineFollowing();
+    break;
+
+    case 1:
+    handleDron();
+    break;
     
-  tresholdedValues[0] = readTresholdedSensor(2);
-  tresholdedValues[1] = readTresholdedSensor(3);
-  tresholdedValues[2] = readTresholdedSensor(14);
-  tresholdedValues[3] = readTresholdedSensor(5);
-  tresholdedValues[4] = readTresholdedSensor(8);
-  tresholdedValues[5] = readTresholdedSensor(10);
+    case 2:
+    break;
+    
+    case 3:
+    break;
 
-  
-  tresholdedValues[6] = readTresholdedSensor(29);
-  tresholdedValues[7] = readTresholdedSensor(51);
-  tresholdedValues[8] = readTresholdedSensor(31);
-  tresholdedValues[9] = readTresholdedSensor(45);
+    case 4:
+    break;
 
+    case 5:
+    break;
 
-// printFrontSensorValue(tresholdedValues);
-// Serial.println("");
-  denumFront=0;
-  numFront=0;
-  
-  for(int i=0; i<6; i++){
-    for(int j=0; j<8; j++){
-      frontSensorPos[i*8+j]=((tresholdedValues[i])<<j);
-      frontSensorPos[i*8+j]=frontSensorPos[i*8+j]>>7;
-      if(frontSensorPos[i*8+j]==0){
-        forDifference[denumFront]=i*8+j;
-        denumFront++;
-        numFront=numFront+i*8+j;
-      }
-    }
+    case 6:
+    break;
+
+    case 7:
+    handleFinish();
+    break;
   }
-
-  vonalSzam=1;
-  for(int i=0; i<denumFront-1; i++){
-    if((forDifference[i+1]-forDifference[i])>1){
-      vonalSzam++;
-    }
-  }
-  if(denumFront==0){
-    vonalSzam=0;
-  }
-
 
 //Vonalszam vizsgalat
+/*
   if((tav2-temp)>tulHosszu){
     counterTav=0;
   }
@@ -291,130 +622,17 @@ void loop() {
   if(counterTav==3){
     counterTav=0;
     if(tavok[2]<=0.01){
-      Serial.println("Körforgalom");
+      //Serial.println("Körforgalom");
     }
     if(tavok[0]<=0.01){
-      Serial.println("Hordo");
+      //Serial.println("Hordo");
     }
   }
-  
+ */ 
   //Serial.println(vonalSzam);
 
-  
-  if(vonalSzam==3){
-    toDroneState++;
-  }
-
-  
-
-  if(toDroneState>15){
-    //Lépjünk be a drone állapotba
-  }
-  
-
-  denumBack=0;
-  numBack=0;
-  
-  uint8_t backSensorPos[32]={0};
-  for(int i=6; i<10; i++){
-    for(int j=0; j<8; j++){
-      backSensorPos[(i-6)*8+j]=((tresholdedValues[i])<<j);
-      backSensorPos[(i-6)*8+j]=backSensorPos[(i-6)*8+j]>>7;
-      if(backSensorPos[(i-6)*8+j]==0){
-        denumBack++;
-        numBack=numBack+(i-6)*8+j;
-      }
-    }
-  }
-  
-if(vonalSzam!=0){
-  linePosFront=(((float)numFront/denumFront)-23.5)*0.006;
-  linePosBack=(((float)numBack/denumBack)-15.5)*0.006;
-  orient=atan((linePosFront-linePosBack)/Lsensor);
-}
-
-/*
-  Serial.println(linePosFront, 8);
-  Serial.println(linePosBack, 8);
-  Serial.print("Orient: ");
-  Serial.println(orient*180/PI);
-*/
-
-/*============================================
-  =          Velocity measurement            =
-  ============================================*/
-  enc_cnt=__HAL_TIM_GET_COUNTER(&timer);
-  __HAL_TIM_SET_COUNTER(&timer,32767);
-  enc_cnt=enc_cnt-32767;
-  tav=enc_cnt*szorzo;
-  tav2=tav2+tav;
-  int currTime = micros();
-  int diffTime = currTime - prevTime;
-  prevTime = currTime;
-  velo=tav/diffTime*1000000;
-  //Serial.println(velo);
-
-  if(velo==0){
-    velo=0.0000000001;
-  
-  }
-  
-/*============================================
-  =          PI velocity controller          =
-  ============================================*/
-   u2=zd*u2past+(1-zd)*upast;
-   u1=Kc*(alap-velo);
-   u=(u1+u2);
-   if(u>6)
-    u=6;
-   motorFord=(u+beta)/alfa;
-   /*
-   Serial.println(motorFord);
-   Serial.println(velo);
-   */
-   motorM.writeMicroseconds(motorFord);
-   u2past=u2;
-   upast=u; 
-
-/*============================================
-  =      State-space line following          =
-  ============================================*/
-  //
-  d5=0.5*velo+0.5;
-  t5=d5/velo;
-  Ttime=(t5*kszi)/3;
-  s1s2=(1/(Ttime*Ttime));
-  s1pluss2=-2*kszi*(1/Ttime);
-  kp=-(Lvesszo/(velo*velo))*s1s2;
-  kd=(Lvesszo/velo)*((s1pluss2)-velo*kp);
-  uszog=-(-kd*orient-kp*linePosFront)/PI*180;
-/*
-  Serial.print("Bemeno szög: ");
-  Serial.println(uszog);
-*/
-  if(uszog>27){
-    
-    pwmbe=1000;
-  }
-  if(uszog<-26.876){
-    pwmbe=2100;
-  }
-  if(uszog<=27 && uszog>=19){
-    pwmbe=-614282.3652+107000.859*uszog-6935.889922*uszog*uszog+198.807768*uszog*uszog*uszog-2.127440683*uszog*uszog*uszog*uszog;
-  }
-  if(uszog<19 && uszog >-20.125){
-    pwmbe=1530.583548-15.34430827*uszog;
-  }
-  if(uszog<=-20.125 && uszog>=-26.876){
-    pwmbe=718281.2226+123156.6653*uszog+7911.076957*uszog*uszog+225.1145702*uszog*uszog*uszog+2.39507239*uszog*uszog*uszog*uszog;
-  }
- /*
-  Serial.print("pwmbe: ");
-  Serial.println(pwmbe);
-  */
-  servoMotor.writeMicroseconds(pwmbe);
-  prevVonalSzam=vonalSzam;
   delay(13);
+  //prevVonalSzam=vonalSzam;
 }
 
 
