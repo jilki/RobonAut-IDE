@@ -310,7 +310,8 @@ void encoderSetup() {
 
 void safetyCar(){
   safetytav = analogRead(46);
-  //if(safetytav=
+
+ // if(safetytav>410
 }
 
 void gyors(){
@@ -414,7 +415,7 @@ void lassu(){
     servoMotor.writeMicroseconds(pwmbe);
 
 
-/*
+
    if(vonalSzam==1){
     egytav = egytav+tav;
    }
@@ -425,14 +426,14 @@ void lassu(){
      haromtav = haromtav+tav;
    }
    
-   if(haromtav>.18){
+   if(haromtav>.30){
     state = 1;
     upast=0;
     u2past=0;
     egytav=0;
     haromtav = 0;
     lassuVege = 0;
-   }*/
+   }
   
 }
 
