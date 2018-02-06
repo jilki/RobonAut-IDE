@@ -12,6 +12,8 @@
 Servo servoMotor;
 Servo motorM;
 
+
+//Szabáláyzóban kd negatív előjele, Lvesszo modosítása, linePosBack-ből számolunk hibát, orientáció számolás módosításaatan
 //Analog labak távolsághoz
 //Baloldali: PB0 49
 //Jobboldali: PA1 47
@@ -28,10 +30,6 @@ TIM_HandleTypeDef timer;
 
 UART_HandleTypeDef uart3struct;
 
-double uszogOld=0;
-float ratioP=100;
-float ratioD=30;
-
 int cycleCount = 0;
 int lastVonalSzam=1;
 //Motor_Controller
@@ -47,8 +45,8 @@ double u=0;
 double u2past=0;
 double upast=0;
 
-double alap=0.7;
-const double constVelo=0.7;////////////////////////////////////////////Use this to set velocity in m/s
+double alap=-0.75;
+const double constVelo=-0.75;////////////////////////////////////////////Use this to set velocity in m/s
 double beta=65.848;
 double alfa=0.0422;
 
@@ -63,14 +61,10 @@ double prevTav = 0;
 
 double tavFin=0;
 double tavFin2=0;
-double safetytav=0;
 
 float tav_dron_pre=0;
 float tav_dron=0;
 int i_dron=0;
-
-float tav_harom=0;
-float tav_egy=0;
 
 int baseservo=1500;
 int upper=1610;
@@ -78,10 +72,8 @@ int upper=1610;
 //Line meas
 byte tresholdedValues[10]={0};
 float linePosFront=0;
-float linePosFrontOld=0;
 float linePosBack=0;
-double orient=0;
-double lastOrient=0;
+float orient=0;
 float Lsensor=0.208;
 
 uint8_t frontSensorPos[48]={0};
@@ -99,18 +91,19 @@ int counterTav=0;
 double tulHosszu=0.2;
 
 //Állapotokhoz
-char state=2;
-//0: safety car
-//1: gyors
-//2: lassú
-//3: fekezes
-
+char state=0;
+//0: akadályok között, keresés;
+//1: Drón
+//2: Sarok
+//3: Konvoj
+//4: Vasút
+//5: Hordó
+//6: Körforgalom
+//7: Cél
 int dronWas=0;
 int counterDron=0;
 int infraDron=0;
 int diffInfraDron=0;
-
-int lassuVege = 0;
 
 
 //State-space controller
@@ -118,8 +111,7 @@ double kszi=sqrt(2)/2;
 double d5=0;
 double t5=1;
 double Ttime=kszi/3;
-double Lvesszo=0.395;
-double Lhossz=0.28;
+double Lvesszo=0.2;
 double s1s2=0;
 double s1pluss2=0;
 double kp=0;
@@ -133,9 +125,12 @@ float ypr0=0;
 float ypr1=0;
 float infr=0;
 float korf=0;
-float haromtav = 0;
-float egytav=0;
 
+int in_fra_flag=0;
+int int_korf=0;
+int parkingCntr =0;
+int parkingState = 0;
+int parkingDir = 0;
 double ido=0; //UART ido szamlaloja
 
 
@@ -160,9 +155,6 @@ void piControll(){
    u=(u1+u2);
    if(u>6)
     u=6;
-   if(u<0)
-    u=0;
-   
    motorFord=(u+beta)/alfa;
    /*
    Serial.println(motorFord);
@@ -178,16 +170,20 @@ void lineControll(){
     =      State-space line following          =
     ============================================*/
     //
-    
+    if(velo<0){
+      velo=abs(velo);
+    }
+    d5=0.8;
+    /*if(velo<0.6){
+      d5=5;
+    }*/
     t5=d5/velo;
     Ttime=(t5*kszi)/3;
     s1s2=(1/(Ttime*Ttime));
     s1pluss2=-2*kszi*(1/Ttime);
     kp=-(Lvesszo/(velo*velo))*s1s2;
-    kd=(Lvesszo/velo)*((s1pluss2)-velo*kp);
-    uszog=-(-kd*orient-kp*linePosFront)/PI*180;
-    uszog=uszog*Lvesszo/Lhossz;
-
+    kd=(Lvesszo/velo)*(-(s1pluss2)-velo*kp);
+    uszog=-(-kd*orient-kp*linePosBack)/PI*180; //*(L-d)/L  d=0.095   L=0.285
     /*
     Serial.print("Bemeno szög: ");
     Serial.println(uszog);
@@ -260,6 +256,48 @@ byte readTresholdedSensor(int boardNum){
   return returnValue;
 }
 
+void lineFollowing(){
+  
+  if(vonalSzam!=3 && dronWas==0){
+    tav_dron=tav_dron-tav; 
+    if(tav_dron<0)tav_dron=0;
+    Serial.print("Dron tav: " );
+    Serial.println(tav_dron, 6);
+  }
+  
+  //Dron -->1
+  if(vonalSzam==3 && dronWas==0)
+  { 
+    tav_dron=tav+tav_dron;
+    Serial.print("Dron tav: " );
+    Serial.println(tav_dron, 6);
+    if(tav_dron>=0.1)state=1;
+  }
+  
+  //Cel -->7
+  if (denumFront>15){
+    //Cél jön
+    state=7;
+  }
+
+  if(cycleCount>225){
+    if(analogRead(49)>250 && analogRead(47)>250){
+      state=2;
+    }
+    
+  }
+
+/*
+  Serial.println(linePosFront, 8);
+  Serial.println(linePosBack, 8);
+  Serial.print("Orient: ");
+  Serial.println(orient*180/PI);
+*/
+  alap=constVelo; 
+
+  lineControll();
+}
+
 void encoderSetup() {
   
   
@@ -308,110 +346,45 @@ void encoderSetup() {
  HAL_TIM_Encoder_Start(&timer,TIM_CHANNEL_1);
 }
 
-void safetyCar(){
-  safetytav = analogRead(46);
-  //if(safetytav=
-}
-
-void gyors(){
-   kszi=0.7;
-   d5=1*velo+0.5; //0.75
-   if(velo<0.6){
-     d5=2;
-   }
-
-  //PI
-   alap=3;
-   u2=zd*u2past+(1-zd)*upast;
-   u1=Kc*(alap-velo);
-   u=(u1+u2);
-   if(u>6)
-    u=6;
-   /*if(u<0)
-    u=0;
-   */
-   motorFord=(u+beta)/alfa;
-   /*
-   Serial.println(motorFord);
-   Serial.println(velo);
-   */
-   motorM.writeMicroseconds(motorFord);
-   u2past=u2;
-   upast=u; 
-
-   if(vonalSzam==3){
-    haromtav = haromtav+tav;
-   }
-   if(haromtav>0.5){
-    motorM.writeMicroseconds(1000);
-    state = 3;
-    upast=0;
-    u2past=0;
-    haromtav=0;
-   }
-   
-}
-
-void fekez(){
-  if(velo>0.75){
-    motorM.writeMicroseconds(1250);
-  }
-  else{
-    state=2;
-    upast=0;
-    u2past=0;
-  }
-}
-void lassu(){
-   kszi=0.65;//0.8
-   //d5=1.25; //1 volt, mikor körbement
-   d5=0.2;
-  //PI
-   alap=1;
-   u2=zd*u2past+(1-zd)*upast;
-   u1=Kc*(alap-velo);
-   u=(u1+u2);
-   if(u>6)
-    u=6;
-    /*
-   if(u<0)
-    u=0;
-   */
-   motorFord=(u+beta)/alfa;
-   /*
-   Serial.println(motorFord);
-   Serial.println(velo);
-   */
-   motorM.writeMicroseconds(motorFord);
-   u2past=u2;
-   upast=u; 
-
-/*
-   if(vonalSzam==1){
-    egytav = egytav+tav;
-   }
-   if(egytav>0.1){
-    lassuVege=1;
-   }
-   if(vonalSzam==3 && lassuVege){
-     haromtav = haromtav+tav;
-   }
-   
-   if(haromtav>.18){
-    state = 1;
-    upast=0;
-    u2past=0;
-    egytav=0;
-    haromtav = 0;
-    lassuVege = 0;
-   }*/
+void InitUart()
+{
+  __GPIOC_CLK_ENABLE();
+  __GPIOB_CLK_ENABLE();
   
+  GPIO_InitTypeDef gpiocstruct;
+  gpiocstruct.Alternate = GPIO_AF7_USART3;
+  gpiocstruct.Mode=GPIO_MODE_AF_PP;
+  gpiocstruct.Pin=pin_rx;
+  gpiocstruct.Pull=GPIO_PULLUP;
+  gpiocstruct.Speed=GPIO_SPEED_HIGH;
+  HAL_GPIO_Init(GPIOC,&gpiocstruct);
+
+  GPIO_InitTypeDef gpiocstruct2;
+  gpiocstruct2.Alternate = GPIO_AF7_USART3;
+  gpiocstruct2.Mode=GPIO_MODE_AF_PP;
+  gpiocstruct2.Pin=pin_tx;
+  gpiocstruct2.Pull=GPIO_PULLUP;
+  gpiocstruct2.Speed=GPIO_SPEED_HIGH;
+  HAL_GPIO_Init(GPIOB,&gpiocstruct2);
+  
+  uart3struct.Instance=USART3;
+  uart3struct.Init.BaudRate= 38400;
+  uart3struct.Init.WordLength=UART_WORDLENGTH_8B;
+  uart3struct.Init.StopBits=UART_STOPBITS_1;
+  uart3struct.Init.Parity=UART_PARITY_NONE;
+  uart3struct.Init.Mode=UART_MODE_TX_RX;
+  uart3struct.Init.HwFlowCtl=UART_HWCONTROL_NONE;
+
+  HAL_UART_MspInit (&uart3struct);
+  __USART3_CLK_ENABLE();
+
+  HAL_UART_Init(&uart3struct);
 }
 
 void setup() {
   Serial.begin(115200);
   Serial.print("started\n");
-  //Serial.println(kszi);
+  Serial.println(kszi);
   // start the SPI library:
   SPI.begin();
   SPI.beginTransaction(SPISettings(1000000, MSBFIRST, SPI_MODE1));
@@ -438,6 +411,7 @@ void setup() {
   digitalWrite(38, HIGH);
   digitalWrite(15, HIGH);
   digitalWrite(22,HIGH);
+  InitUart();
   delay(1000); ///////////////////////////////////////////////////////////////////////Ez nemtom kell e ide///////////////////
   ido=timeElapsed;
 
@@ -449,7 +423,7 @@ void setup() {
   motorM.writeMicroseconds(basemotor);
 
   // give the motor time to set up:
-  delay(3000);
+  delay(2000);
   Serial.println("Loop");
   szorzo=(100*PI/(((48*38)/(13*13))*256))/1000;
   __HAL_TIM_SET_COUNTER(&timer,32767);
@@ -461,11 +435,11 @@ void setup() {
 }
 
 void loop() {
-  
-  //Serial.print("Seb: ");
-  //Serial.print(orient);
-  //Serial.print("  allapot");
-  //Serial.println((int)state);
+
+  Serial.print("Seb: ");
+  Serial.print(vonalSzam);
+  Serial.print("  ido: ");
+  Serial.println(timeElapsed);
 
   //Send interrupt
   digitalWrite(44,HIGH);
@@ -520,40 +494,9 @@ void loop() {
     if(tav_dron>=0.1)state=1;
   }
   */
-  /*
   if(denumFront==0){
     vonalSzam=0;
   }
-
-  if(vonalSzam==3)
-  { 
-    tav_harom=tav+tav_harom;
-    if(tav_harom>0.05){
-      tav_egy=0;
-    }
-    
-  }
-  if(vonalSzam!=3 && lastVonalSzam==3){
-    
-      alap=3;
-
-    tav_harom=0;
-  }
-  if(vonalSzam==1){
-    
-  }
-
-  if(tav_haromtav_>0.1){
-    alap=0.5;
-  }
-  */
-  /*
-  Serial.print("  Harom tav: " );
-  Serial.print(tav_harom, 6);
-  Serial.print("  alap: ");
-  Serial.println(alap);
-  */
-  
   denumBack=0;
   numBack=0;
   
@@ -573,22 +516,6 @@ void loop() {
   linePosFront=(((float)numFront/denumFront)-23.5)*0.006;
   linePosBack=(((float)numBack/denumBack)-15.5)*0.006;
   orient=atan((linePosFront-linePosBack)/Lsensor);
-
-  if(isnan(linePosFront)){
-    linePosFront=linePosFrontOld;
-  }
-  
-  if(isnan(orient)){
-    orient=lastOrient;
-  }
-
- if(isnan(uszog)){
-    uszog=uszogOld;
-  }
-  
-  //Serial.println(orient*180/3.14);
-  //Serial.println(linePosFront);
-  
 
   /*============================================
   =          Velocity measurement            =
@@ -610,60 +537,40 @@ void loop() {
   
   }
 
-
-
-  switch (state){
-    case 0:
-    safetyCar();
-    break;
-    case 1:
-    gyors();
-    break;
-    case 2:
-    lassu();
-    break;
-    case 3:
-    fekez();
-    break;
+    piControll();
+    lineControll();
+//Vonalszam vizsgalat
+/*
+  if((tav2-temp)>tulHosszu){
+    counterTav=0;
   }
-  ratioP=200;  ///1000-nél állandó lengés szögben, 800-nél leng, 150-nél még leng egy kicsit
-  //ratioD=
-  ratioD=1/3;  //Tu=~2  //1/4 volt az eredeti, egyenesre majdnem jó
-  float valtozo;
-  //uszog=-(ratioP*linePosFront)/PI*180;
-    uszog=(-(ratioP*linePosFront+ratioD*(linePosFront-linePosFrontOld)/0.02));
-// uszog=(linePosFront-0.992*linePosFrontOld+327.6 *uszogOld)/330;
-  //valtozo=baseservo+ratioP*linePosFront+ratioD*(linePosFront-linePosFrontOld);
-  
 
-    if(uszog>27)
-    {
-      pwmbe=1000;
+  if((vonalSzam-prevVonalSzam)!=0 && vonalSzam != 3){
+    if(counterTav==0){
+      temp=tav2;
     }
-    if(uszog<-26.876){
-      pwmbe=2100;
+    if(counterTav!=0){
+      tavok[prevVonalSzam]=tav2-temp;
+      temp=tav2;
     }
-    if(uszog<=27 && uszog>=19){
-      pwmbe=-614282.3652+107000.859*uszog-6935.889922*uszog*uszog+198.807768*uszog*uszog*uszog-2.127440683*uszog*uszog*uszog*uszog;
+    counterTav++;
+  }
+  if(counterTav==3){
+    counterTav=0;
+    if(tavok[2]<=0.01){
+      //Serial.println("Körforgalom");
     }
-    if(uszog<19 && uszog >-20.125){
-      pwmbe=1530.583548-15.34430827*uszog;
+    if(tavok[0]<=0.01){
+      //Serial.println("Hordo");
     }
-    if(uszog<=-20.125 && uszog>=-26.876){
-      pwmbe=718281.2226+123156.6653*uszog+7911.076957*uszog*uszog+225.1145702*uszog*uszog*uszog+2.39507239*uszog*uszog*uszog*uszog;
-    }
-    Serial.println(pwmbe);
-    servoMotor.writeMicroseconds(pwmbe);
-    
-   //lineControll();
+  }
+  l
+  
+ */ 
   //Serial.println(vonalSzam);
-  //Serial.println(timeElapsed);
-  lastVonalSzam=vonalSzam;
-  lastOrient=orient;
+  Serial.println(timeElapsed);
   delay(13);
   //prevVonalSzam=vonalSzam;
-  linePosFrontOld=linePosFront;
-  uszogOld=uszog;
 }
 
 
