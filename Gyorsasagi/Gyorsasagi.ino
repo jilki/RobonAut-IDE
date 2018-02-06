@@ -99,7 +99,7 @@ int counterTav=0;
 double tulHosszu=0.2;
 
 //Állapotokhoz
-char state=2;
+char state=1;
 //0: safety car
 //1: gyors
 //2: lassú
@@ -319,6 +319,7 @@ void gyors(){
    if(velo<0.6){
      d5=2;
    }
+   lineControll();
 
   //PI
    alap=3;
@@ -355,6 +356,7 @@ void gyors(){
 void fekez(){
   if(velo>0.75){
     motorM.writeMicroseconds(1250);
+    lineControll();
   }
   else{
     state=2;
@@ -363,9 +365,6 @@ void fekez(){
   }
 }
 void lassu(){
-   kszi=0.65;//0.8
-   //d5=1.25; //1 volt, mikor körbement
-   d5=0.2;
   //PI
    alap=1;
    u2=zd*u2past+(1-zd)*upast;
@@ -378,13 +377,42 @@ void lassu(){
     u=0;
    */
    motorFord=(u+beta)/alfa;
+   motorM.writeMicroseconds(motorFord);
+
+   u2past=u2;
+   upast=u; 
    /*
    Serial.println(motorFord);
    Serial.println(velo);
    */
-   motorM.writeMicroseconds(motorFord);
-   u2past=u2;
-   upast=u; 
+     ratioP=200;  ///1000-nél állandó lengés szögben, 800-nél leng, 150-nél még leng egy kicsit
+  //ratioD=
+  ratioD=1/3;  //Tu=~2  //1/4 volt az eredeti, egyenesre majdnem jó
+  //uszog=-(ratioP*linePosFront)/PI*180;
+    uszog=(-(ratioP*linePosFront+ratioD*(linePosFront-linePosFrontOld)/0.02));
+// uszog=(linePosFront-0.992*linePosFrontOld+327.6 *uszogOld)/330;
+  //valtozo=baseservo+ratioP*linePosFront+ratioD*(linePosFront-linePosFrontOld);
+  
+
+    if(uszog>27)
+    {
+      pwmbe=1000;
+    }
+    if(uszog<-26.876){
+      pwmbe=2100;
+    }
+    if(uszog<=27 && uszog>=19){
+      pwmbe=-614282.3652+107000.859*uszog-6935.889922*uszog*uszog+198.807768*uszog*uszog*uszog-2.127440683*uszog*uszog*uszog*uszog;
+    }
+    if(uszog<19 && uszog >-20.125){
+      pwmbe=1530.583548-15.34430827*uszog;
+    }
+    if(uszog<=-20.125 && uszog>=-26.876){
+      pwmbe=718281.2226+123156.6653*uszog+7911.076957*uszog*uszog+225.1145702*uszog*uszog*uszog+2.39507239*uszog*uszog*uszog*uszog;
+    }
+    Serial.println(pwmbe);
+    servoMotor.writeMicroseconds(pwmbe);
+
 
 /*
    if(vonalSzam==1){
@@ -511,49 +539,7 @@ void loop() {
       vonalSzam++;
     }
   }
-/*
-   if(vonalSzam==3 && dronWas==0)
-  { 
-    tav_dron=tav+tav_dron;
-    Serial.print("Dron tav: " );
-    Serial.println(tav_dron, 6);
-    if(tav_dron>=0.1)state=1;
-  }
-  */
-  /*
-  if(denumFront==0){
-    vonalSzam=0;
-  }
 
-  if(vonalSzam==3)
-  { 
-    tav_harom=tav+tav_harom;
-    if(tav_harom>0.05){
-      tav_egy=0;
-    }
-    
-  }
-  if(vonalSzam!=3 && lastVonalSzam==3){
-    
-      alap=3;
-
-    tav_harom=0;
-  }
-  if(vonalSzam==1){
-    
-  }
-
-  if(tav_haromtav_>0.1){
-    alap=0.5;
-  }
-  */
-  /*
-  Serial.print("  Harom tav: " );
-  Serial.print(tav_harom, 6);
-  Serial.print("  alap: ");
-  Serial.println(alap);
-  */
-  
   denumBack=0;
   numBack=0;
   
@@ -610,8 +596,6 @@ void loop() {
   
   }
 
-
-
   switch (state){
     case 0:
     safetyCar();
@@ -626,36 +610,9 @@ void loop() {
     fekez();
     break;
   }
-  ratioP=200;  ///1000-nél állandó lengés szögben, 800-nél leng, 150-nél még leng egy kicsit
-  //ratioD=
-  ratioD=1/3;  //Tu=~2  //1/4 volt az eredeti, egyenesre majdnem jó
-  float valtozo;
-  //uszog=-(ratioP*linePosFront)/PI*180;
-    uszog=(-(ratioP*linePosFront+ratioD*(linePosFront-linePosFrontOld)/0.02));
-// uszog=(linePosFront-0.992*linePosFrontOld+327.6 *uszogOld)/330;
-  //valtozo=baseservo+ratioP*linePosFront+ratioD*(linePosFront-linePosFrontOld);
-  
 
-    if(uszog>27)
-    {
-      pwmbe=1000;
-    }
-    if(uszog<-26.876){
-      pwmbe=2100;
-    }
-    if(uszog<=27 && uszog>=19){
-      pwmbe=-614282.3652+107000.859*uszog-6935.889922*uszog*uszog+198.807768*uszog*uszog*uszog-2.127440683*uszog*uszog*uszog*uszog;
-    }
-    if(uszog<19 && uszog >-20.125){
-      pwmbe=1530.583548-15.34430827*uszog;
-    }
-    if(uszog<=-20.125 && uszog>=-26.876){
-      pwmbe=718281.2226+123156.6653*uszog+7911.076957*uszog*uszog+225.1145702*uszog*uszog*uszog+2.39507239*uszog*uszog*uszog*uszog;
-    }
-    Serial.println(pwmbe);
-    servoMotor.writeMicroseconds(pwmbe);
     
-   //lineControll();
+   //
   //Serial.println(vonalSzam);
   //Serial.println(timeElapsed);
   lastVonalSzam=vonalSzam;
