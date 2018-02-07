@@ -69,7 +69,10 @@ double prevTav = 0;
 double tavFin=0;
 double tavFin2=0;
 
-int alapTav=0.35;
+double alapTavGyors=0.35;
+double safetyPGyors=-1;
+double alapTavLassu=0.35;
+double safetyPLassu=-0.6;
 double safetytav=0;
 double safetytav_old=0;
 double safetyTavMeter=0;
@@ -127,6 +130,8 @@ int infraDron=0;
 int diffInfraDron=0;
 
 int lassuVege = 0;
+
+int safetyState = 0;
 
 
 //State-space controller
@@ -381,13 +386,13 @@ void safetyCarStart(){
    lineControll();
 }
 
-void safetyCarFollow(){
+void safetyGyors(){
   safetytav=analogRead(46);
   safetyTavMeter=(346.057431746-2.139933215*safetytav+0.0059117068*safetytav*safetytav-0.000007427005*safetytav*safetytav*safetytav+0.000000003436*safetytav*safetytav*safetytav*safetytav)/100;
   Serial.print(" MEter: ");
   Serial.println(safetyTavMeter);
   
-  alap=safetyP*(alapTav-safetyTavMeter)+1;  //negatív jön, akkor lassítani, pozitív, akkor gyorsítani
+  alap=safetyPGyors*(alapTavGyors-safetyTavMeter)+1;  //negatív jön, akkor lassítani, pozitív, akkor gyorsítani
   if(alap>1.7){
     alap=1.7;
   }
@@ -398,8 +403,8 @@ void safetyCarFollow(){
   else{
     piControll();
   }
-  Serial.println(safetytav);
-   ratioP=200;  ///1000-nél állandó lengés szögben, 800-nél leng, 150-nél még leng egy kicsit
+  Serial.println(safetytav); //P=200 D=1/3
+   ratioP=150;  ///1000-nél állandó lengés szögben, 800-nél leng, 150-nél még leng egy kicsit
   //ratioD=
   ratioD=1/3;  //Tu=~2  //1/4 volt az eredeti, egyenesre majdnem jó
   //uszog=-(ratioP*linePosFront)/PI*180;
@@ -426,17 +431,97 @@ void safetyCarFollow(){
     }
     //Serial.println(pwmbe);
     servoMotor.writeMicroseconds(pwmbe);
-/*
-  if(analogRead(49)>360 && analogRead(47)>360){
-    state=1;
+
+  
+   if(vonalSzam==3){
+    haromtav = haromtav+tav;
+   }
+   if(haromtav>1){
+    motorM.writeMicroseconds(1000);
+    safetyState = 1;
+    upast=0;
+    u2past=0;
+    haromtav=0;
+   }
+}
+
+void safetyLassu(){
+  safetytav=analogRead(46);
+  safetyTavMeter=(346.057431746-2.139933215*safetytav+0.0059117068*safetytav*safetytav-0.000007427005*safetytav*safetytav*safetytav+0.000000003436*safetytav*safetytav*safetytav*safetytav)/100;
+  Serial.print(" MEter: ");
+  Serial.println(safetyTavMeter);
+  
+  alap=safetyPLassu*(alapTavLassu-safetyTavMeter)+1;  //negatív jön, akkor lassítani, pozitív, akkor gyorsítani
+  if(alap>1.1){
+    alap=1.1;
   }
-  */
-  /*
-  if(safetytav<380){
-    alap=1.7;
+  
+  if(safetytav>450){
+    motorM.writeMicroseconds(1000);
+  }
+  else{
     piControll();
   }
-  */
+  Serial.println(safetytav);
+   ratioP=250;  ///1000-nél állandó lengés szögben, 800-nél leng, 150-nél még leng egy kicsit
+  //ratioD=
+  ratioD=1/3;  //Tu=~2  //1/4 volt az eredeti, egyenesre majdnem jó
+  //uszog=-(ratioP*linePosFront)/PI*180;
+    uszog=(-(ratioP*linePosFront+ratioD*(linePosFront-linePosFrontOld)/0.02));
+// uszog=(linePosFront-0.992*linePosFrontOld+327.6 *uszogOld)/330;
+  //valtozo=baseservo+ratioP*linePosFront+ratioD*(linePosFront-linePosFrontOld);
+  
+
+    if(uszog>27)
+    {
+      pwmbe=1000;
+    }
+    if(uszog<-26.876){
+      pwmbe=2100;
+    }
+    if(uszog<=27 && uszog>=19){
+      pwmbe=-614282.3652+107000.859*uszog-6935.889922*uszog*uszog+198.807768*uszog*uszog*uszog-2.127440683*uszog*uszog*uszog*uszog;
+    }
+    if(uszog<19 && uszog >-20.125){
+      pwmbe=1530.583548-15.34430827*uszog;
+    }
+    if(uszog<=-20.125 && uszog>=-26.876){
+      pwmbe=718281.2226+123156.6653*uszog+7911.076957*uszog*uszog+225.1145702*uszog*uszog*uszog+2.39507239*uszog*uszog*uszog*uszog;
+    }
+    //Serial.println(pwmbe);
+    servoMotor.writeMicroseconds(pwmbe);
+
+   if(vonalSzam==1){
+    egytav = egytav+tav;
+   }
+   if(egytav>0.1){
+    lassuVege=1;
+   }
+   if(vonalSzam==3 && lassuVege){
+     haromtav = haromtav+tav;
+   }
+   
+   if(haromtav>.30){
+    safetyState = 0;
+    upast=0;
+    u2past=0;
+    egytav=0;
+    haromtav = 0;
+    lassuVege = 0;
+   }
+  
+}
+
+
+void safetyCarFollow(){
+  switch (safetyState){
+    case 0:
+    safetyGyors();
+    break;
+    case 1:
+    safetyLassu();
+    break;
+  }
 }
 void gyors(){
    kszi=0.7;
