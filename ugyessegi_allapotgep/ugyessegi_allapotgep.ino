@@ -12,6 +12,14 @@
 Servo servoMotor;
 Servo motorM;
 
+int vegTime=0;
+int kezdTime=0;
+int delaymillis=0;
+int statusUart=0;
+uint8_t inBuf[2]={0};
+double ratioP=0;
+double ratioD=0;
+double linePosFrontOld=0;
 //Analog labak távolsághoz
 //Baloldali: PB0 49
 //Jobboldali: PA1 47
@@ -105,7 +113,7 @@ int diffInfraDron=0;
 
 
 //State-space controller
-double kszi=sqrt(2)/2;
+double kszi=0.85;//sqrt(2)/2;
 double d5=0;
 double t5=1;
 double Ttime=kszi/3;
@@ -168,21 +176,44 @@ void lineControll(){
     =      State-space line following          =
     ============================================*/
     //
-    d5=0.5*velo+0.5;
-    if(velo<0.6){
-      d5=2;
+    /*
+    if(velo==0){
+      d5=0.5*0.00000001+0.5;
+      if(velo<0.6){
+        d5=2;
+      }
+      t5=d5/0.00000001;
+      Ttime=(t5*kszi)/3;
+      s1s2=(1/(Ttime*Ttime));
+      s1pluss2=-2*kszi*(1/Ttime);
+      kp=-(Lvesszo/(0.00000001*0.00000001))*s1s2;
+      kd=(Lvesszo/0.00000001)*((s1pluss2)-0.00000001*kp);
+      uszog=-(-kd*orient-kp*linePosFront)/PI*180;
     }
-    t5=d5/velo;
-    Ttime=(t5*kszi)/3;
-    s1s2=(1/(Ttime*Ttime));
-    s1pluss2=-2*kszi*(1/Ttime);
-    kp=-(Lvesszo/(velo*velo))*s1s2;
-    kd=(Lvesszo/velo)*((s1pluss2)-velo*kp);
-    uszog=-(-kd*orient-kp*linePosFront)/PI*180;
+    else{
+      d5=0.5*velo+0.5;
+      if(velo<0.6){
+        d5=2;
+      }
+      t5=d5/velo;
+      Ttime=(t5*kszi)/3;
+      s1s2=(1/(Ttime*Ttime));
+      s1pluss2=-2*kszi*(1/Ttime);
+      kp=-(Lvesszo/(velo*velo))*s1s2;
+      kd=(Lvesszo/velo)*((s1pluss2)-velo*kp);
+      uszog=-(-kd*orient-kp*linePosFront)/PI*180;
+    }
+    */
     /*
     Serial.print("Bemeno szög: ");
     Serial.println(uszog);
     */
+    ratioP=250;  ///1000-nél állandó lengés szögben, 800-nél leng, 150-nél még leng egy kicsit
+    //ratioD=
+    ratioD=1/3;  //Tu=~2  //1/4 volt az eredeti, egyenesre majdnem jó
+    //uszog=-(ratioP*linePosFront)/PI*180;
+    uszog=(-(ratioP*linePosFront+ratioD*(linePosFront-linePosFrontOld)/0.04));
+    
     if(uszog>27){
       
       pwmbe=1000;
@@ -347,11 +378,10 @@ void handleParking(){
 
 }
 
-//void handleKorforg
 void handleDron(){
   dronWas=1;
   Serial.println("beleptem dron");
-  if(velo>0.0000000001){
+  if(velo>0){
     alap=-5;
     /*============================================
     =      State-space line following          =
@@ -359,7 +389,7 @@ void handleDron(){
     lineControll();
   }
 
-  if(velo<0.001){
+  if(velo==0){
     /*
     Serial.print("Analog");
     Serial.println(analogRead(46));
@@ -378,18 +408,18 @@ void handleDron(){
         state=0;
       }
     }*/
-    if(analogRead(46)<130){
+    if(analogRead(46)<90){
       alap=0;
       delay(2100);
       state = 0;
+      u2past=0;
+      upast=0;
     }
   }
 }
 
 void lineFollowing(){
 
-  
-  
   if(vonalSzam!=3 && dronWas==0){
     tav_dron=tav_dron-tav; 
     if(tav_dron<0)tav_dron=0;
@@ -413,10 +443,12 @@ void lineFollowing(){
   }
 
   if(cycleCount>225){
-    if(analogRead(49)>250 && analogRead(47)>250){
+    if(analogRead(49)>150 && analogRead(47)>150){
       state=2;
+      while(statusUart!=HAL_TIMEOUT){
+        statusUart=HAL_UART_Receive(&uart3struct,inBuf,1,5);
+      }
     }
-    
   }
 
 /*
@@ -544,6 +576,11 @@ void setup() {
   digitalWrite(15, HIGH);
   digitalWrite(22,HIGH);
   InitUart();
+  
+  while(statusUart!=HAL_TIMEOUT){
+    statusUart=HAL_UART_Receive(&uart3struct,inBuf,1,5);
+  }
+  
   delay(1000); ///////////////////////////////////////////////////////////////////////Ez nemtom kell e ide///////////////////
   ido=timeElapsed;
 
@@ -560,22 +597,16 @@ void setup() {
   szorzo=(100*PI/(((48*38)/(13*13))*256))/1000;
   __HAL_TIM_SET_COUNTER(&timer,32767);
   Serial.println(__HAL_TIM_GET_COUNTER(&timer));
-  prevTime = micros();
+  
 
   //Start kapu
   while(digitalRead(22)!=LOW){delay(1);}
+  prevTime = micros();
 }
 
 void loop() {
-
-  Serial.print("State: ");
-  Serial.print((int)state);
-  Serial.print("  elso: ");
-  Serial.print(analogRead(46));
-  Serial.print("  jobb: ");
-  Serial.print(analogRead(47));
-  Serial.print("  bal: ");
-  Serial.println(analogRead(49));
+  kezdTime=timeElapsed;
+  
   //Send interrupt
   digitalWrite(44,HIGH);
   delay(1);
@@ -657,11 +688,6 @@ void loop() {
   //Serial.println(tav2);
   //Serial.println(velo);
 
-  if(velo==0){
-    velo=0.0000000001;
-  
-  }
-
 
   /*
   Serial.print("State");
@@ -733,10 +759,21 @@ void loop() {
     }
   }
  */ 
-  //Serial.println(vonalSzam);
-  Serial.println(timeElapsed);
-  delay(13);
+  linePosFrontOld=linePosFront;
+  /*
+  Serial.print("State:  ");
+  Serial.print((int)state);
+  Serial.print("  Analog:  ");
+  Serial.println();
+  */
+  vegTime=timeElapsed;
+  if((vegTime-kezdTime)<20){
+    delaymillis=20-(vegTime-kezdTime);
+    if(delaymillis<0){
+      delaymillis=0;
+    }
+  }
+  delay(delaymillis);
+  //Serial.println(timeElapsed);
   //prevVonalSzam=vonalSzam;
 }
-
-
