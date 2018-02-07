@@ -406,9 +406,9 @@ void safetyGyors(){
   Serial.println(safetytav); //P=200 D=1/3
    ratioP=150;  ///1000-nél állandó lengés szögben, 800-nél leng, 150-nél még leng egy kicsit
   //ratioD=
-  ratioD=1/3;  //Tu=~2  //1/4 volt az eredeti, egyenesre majdnem jó
+  ratioD=8;  //Tu=~2  //1/4 volt az eredeti, egyenesre majdnem jó
   //uszog=-(ratioP*linePosFront)/PI*180;
-    uszog=(-(ratioP*linePosFront+ratioD*(linePosFront-linePosFrontOld)/0.02));
+    uszog=(-(ratioP*linePosFront+ratioD*(linePosFront-linePosFrontOld)/0.04));
 // uszog=(linePosFront-0.992*linePosFrontOld+327.6 *uszogOld)/330;
   //valtozo=baseservo+ratioP*linePosFront+ratioD*(linePosFront-linePosFrontOld);
   
@@ -443,6 +443,7 @@ void safetyGyors(){
     u2past=0;
     haromtav=0;
    }
+   Serial.println(timeElapsed);
 }
 
 void safetyLassu(){
@@ -467,7 +468,7 @@ void safetyLassu(){
   //ratioD=
   ratioD=1/3;  //Tu=~2  //1/4 volt az eredeti, egyenesre majdnem jó
   //uszog=-(ratioP*linePosFront)/PI*180;
-    uszog=(-(ratioP*linePosFront+ratioD*(linePosFront-linePosFrontOld)/0.02));
+    uszog=(-(ratioP*linePosFront+ratioD*(linePosFront-linePosFrontOld)/0.04));
 // uszog=(linePosFront-0.992*linePosFrontOld+327.6 *uszogOld)/330;
   //valtozo=baseservo+ratioP*linePosFront+ratioD*(linePosFront-linePosFrontOld);
   
