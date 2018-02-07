@@ -32,6 +32,8 @@ double uszogOld=0;
 float ratioP=100;
 float ratioD=30;
 
+
+
 int cycleCount = 0;
 int lastVonalSzam=1;
 //Motor_Controller
@@ -63,7 +65,10 @@ double prevTav = 0;
 
 double tavFin=0;
 double tavFin2=0;
+
+int alapTav=350;
 double safetytav=0;
+double safetyP=0.004;
 
 float tav_dron_pre=0;
 float tav_dron=0;
@@ -99,7 +104,7 @@ int counterTav=0;
 double tulHosszu=0.2;
 
 //Állapotokhoz
-char state=1;
+char state=0;
 //0: safety car
 //1: gyors
 //2: lassú
@@ -309,9 +314,25 @@ void encoderSetup() {
 }
 
 void safetyCar(){
-  safetytav = analogRead(46);
+  safetytav = analogRead(46);  //1 m-re 221  0,0075
 
- // if(safetytav>410
+  alap=safetyP*(alapTav-safetytav)+1.2;  //negatív jön, akkor lassítani, pozitív, akkor gyorsítani
+  kszi=0.7;
+   d5=1*velo+0.5; //0.75
+   if(velo<0.6){
+     d5=2;
+   }
+   piControll();
+  lineControll();
+  /*
+  if(safetytav>410){
+    motorM.writeMicroseconds(1000);
+  }
+  if(safetytav<380){
+    alap=1.7;
+    piControll();
+  }
+  */
 }
 
 void gyors(){
