@@ -7,10 +7,13 @@
 
 #define _servopin  32 //PC9
 #define _motorpin  7  //PA8
+#define _tavservopin 40 //PB2
 #define magnetic_encoder_cha (uint16_t)1<<6 // PC6  Föld melletti  CHB
 #define magnetic_encoder_chb (uint16_t)1<<5 // PB5  5V melletti  CHA  
 Servo servoMotor;
 Servo motorM;
+Servo tavServo; 
+//Új servo lehetőségek: TIM2 CH4 PB2=D40
 
 //Analog labak távolsághoz
 //Baloldali: PB0 49
@@ -66,9 +69,16 @@ double prevTav = 0;
 double tavFin=0;
 double tavFin2=0;
 
-int alapTav=350;
+int alapTav=0.35;
 double safetytav=0;
-double safetyP=0.004;
+double safetytav_old=0;
+double safetyTavMeter=0;
+double safetyP=-1;
+int elsoSafety=0;
+int elsoSafety_beallt=0;
+int cntVelo=0;
+double veloPast=0;
+int volt5=0;
 
 float tav_dron_pre=0;
 float tav_dron=0;
@@ -105,10 +115,11 @@ double tulHosszu=0.2;
 
 //Állapotokhoz
 char state=0;
-//0: safety car
+//0: safety car start
 //1: gyors
 //2: lassú
 //3: fekezes
+//4: safety car follow
 
 int dronWas=0;
 int counterDron=0;
@@ -184,15 +195,26 @@ void lineControll(){
     ============================================*/
     //
     
-    t5=d5/velo;
-    Ttime=(t5*kszi)/3;
-    s1s2=(1/(Ttime*Ttime));
-    s1pluss2=-2*kszi*(1/Ttime);
-    kp=-(Lvesszo/(velo*velo))*s1s2;
-    kd=(Lvesszo/velo)*((s1pluss2)-velo*kp);
-    uszog=-(-kd*orient-kp*linePosFront)/PI*180;
-    uszog=uszog*Lvesszo/Lhossz;
-
+    if(velo==0){
+      t5=d5/0.0000000001;
+      Ttime=(t5*kszi)/3;
+      s1s2=(1/(Ttime*Ttime));
+      s1pluss2=-2*kszi*(1/Ttime);
+      kp=-(Lvesszo/(0.0000000001*0.0000000001))*s1s2;
+      kd=(Lvesszo/0.0000000001)*((s1pluss2)-0.0000000001*kp);
+      uszog=-(-kd*orient-kp*linePosFront)/PI*180;
+      uszog=uszog*Lvesszo/Lhossz;
+    }
+    else{
+      t5=d5/velo;
+      Ttime=(t5*kszi)/3;
+      s1s2=(1/(Ttime*Ttime));
+      s1pluss2=-2*kszi*(1/Ttime);
+      kp=-(Lvesszo/(velo*velo))*s1s2;
+      kd=(Lvesszo/velo)*((s1pluss2)-velo*kp);
+      uszog=-(-kd*orient-kp*linePosFront)/PI*180;
+      uszog=uszog*Lvesszo/Lhossz;
+    }
     /*
     Serial.print("Bemeno szög: ");
     Serial.println(uszog);
@@ -313,28 +335,109 @@ void encoderSetup() {
  HAL_TIM_Encoder_Start(&timer,TIM_CHANNEL_1);
 }
 
-void safetyCar(){
+void safetyCarStart(){
   safetytav = analogRead(46);  //1 m-re 221  0,0075
+  //Serial.print("Safetytav: ");
+  //Serial.print(safetytav);
+  if(elsoSafety==0){
+    if(safetytav>230){
+      motorM.writeMicroseconds(1500);
+      safetytav_old=safetytav;
+      elsoSafety=2;
+      Serial.println("Elsosafety=0, tavn belulrol indultunk");
+    }
+    else{
+      elsoSafety=1;
+      Serial.println("Elso safety=1");
+    }
+  }
+  
+  else if(elsoSafety==1 && elsoSafety_beallt==0){
+      if(safetytav<230){
+        Serial.println("Kivulrol indultunk, gaz");
+        alap=0.75;
+        piControll();
+      }
+      else{
+        Serial.println("Kivulrol indultunk, mar eleg kozel vunk");
+        motorM.writeMicroseconds(1500);
+        safetytav_old=safetytav;
+        elsoSafety_beallt=1; 
+      }
+  }
 
-  alap=safetyP*(alapTav-safetytav)+1.2;  //negatív jön, akkor lassítani, pozitív, akkor gyorsítani
+ 
+  if(abs(safetytav-safetytav_old)> 30 && safetytav_old!=0 && velo==0){
+    state=4;
+    Serial.println("Menjunk state 4 be");
+    Serial.println(safetytav);
+  }
+
   kszi=0.7;
    d5=1*velo+0.5; //0.75
    if(velo<0.6){
      d5=2;
    }
-   piControll();
-  lineControll();
-  /*
-  if(safetytav>410){
+   lineControll();
+}
+
+void safetyCarFollow(){
+  safetytav=analogRead(46);
+  safetyTavMeter=(346.057431746-2.139933215*safetytav+0.0059117068*safetytav*safetytav-0.000007427005*safetytav*safetytav*safetytav+0.000000003436*safetytav*safetytav*safetytav*safetytav)/100;
+  Serial.print(" MEter: ");
+  Serial.println(safetyTavMeter);
+  
+  alap=safetyP*(alapTav-safetyTavMeter)+1;  //negatív jön, akkor lassítani, pozitív, akkor gyorsítani
+  if(alap>1.7){
+    alap=1.7;
+  }
+  
+  if(safetytav>450){
     motorM.writeMicroseconds(1000);
   }
+  else{
+    piControll();
+  }
+  Serial.println(safetytav);
+   ratioP=200;  ///1000-nél állandó lengés szögben, 800-nél leng, 150-nél még leng egy kicsit
+  //ratioD=
+  ratioD=1/3;  //Tu=~2  //1/4 volt az eredeti, egyenesre majdnem jó
+  //uszog=-(ratioP*linePosFront)/PI*180;
+    uszog=(-(ratioP*linePosFront+ratioD*(linePosFront-linePosFrontOld)/0.02));
+// uszog=(linePosFront-0.992*linePosFrontOld+327.6 *uszogOld)/330;
+  //valtozo=baseservo+ratioP*linePosFront+ratioD*(linePosFront-linePosFrontOld);
+  
+
+    if(uszog>27)
+    {
+      pwmbe=1000;
+    }
+    if(uszog<-26.876){
+      pwmbe=2100;
+    }
+    if(uszog<=27 && uszog>=19){
+      pwmbe=-614282.3652+107000.859*uszog-6935.889922*uszog*uszog+198.807768*uszog*uszog*uszog-2.127440683*uszog*uszog*uszog*uszog;
+    }
+    if(uszog<19 && uszog >-20.125){
+      pwmbe=1530.583548-15.34430827*uszog;
+    }
+    if(uszog<=-20.125 && uszog>=-26.876){
+      pwmbe=718281.2226+123156.6653*uszog+7911.076957*uszog*uszog+225.1145702*uszog*uszog*uszog+2.39507239*uszog*uszog*uszog*uszog;
+    }
+    //Serial.println(pwmbe);
+    servoMotor.writeMicroseconds(pwmbe);
+/*
+  if(analogRead(49)>360 && analogRead(47)>360){
+    state=1;
+  }
+  */
+  /*
   if(safetytav<380){
     alap=1.7;
     piControll();
   }
   */
 }
-
 void gyors(){
    kszi=0.7;
    d5=1*velo+0.5; //0.75
@@ -497,6 +600,8 @@ void setup() {
   servoMotor.writeMicroseconds(baseservo);
   motorM.attach(_motorpin);
   motorM.writeMicroseconds(basemotor);
+  tavServo.attach(_tavservopin);
+  tavServo.writeMicroseconds(baseservo);
 
   // give the motor time to set up:
   delay(3000);
@@ -511,7 +616,7 @@ void setup() {
 }
 
 void loop() {
-  
+  tavServo.writeMicroseconds(pwmbe);
   //Serial.print("Seb: ");
   //Serial.print(orient);
   //Serial.print("  allapot");
@@ -613,14 +718,9 @@ void loop() {
   //Serial.println(tav2);
   //Serial.println(velo);
 
-  if(velo==0){
-    velo=0.0000000001;
-  
-  }
-
   switch (state){
     case 0:
-    safetyCar();
+    safetyCarStart();
     break;
     case 1:
     gyors();
@@ -631,6 +731,8 @@ void loop() {
     case 3:
     fekez();
     break;
+    case 4:
+    safetyCarFollow();
   }
 
     
@@ -639,6 +741,7 @@ void loop() {
   //Serial.println(timeElapsed);
   lastVonalSzam=vonalSzam;
   lastOrient=orient;
+  veloPast=velo;
   delay(13);
   //prevVonalSzam=vonalSzam;
   linePosFrontOld=linePosFront;
