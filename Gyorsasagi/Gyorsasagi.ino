@@ -70,9 +70,9 @@ double tavFin=0;
 double tavFin2=0;
 
 double alapTavGyors=0.35;
-double safetyPGyors=-1;
+double safetyPGyors=-1.2;
 double alapTavLassu=0.35;
-double safetyPLassu=-0.6;
+double safetyPLassu=-0.75;
 double safetytav=0;
 double safetytav_old=0;
 double safetyTavMeter=0;
@@ -404,6 +404,7 @@ void safetyGyors(){
     piControll();
   }
   Serial.println(safetytav); //P=200 D=1/3
+ 
    ratioP=150;  ///1000-nél állandó lengés szögben, 800-nél leng, 150-nél még leng egy kicsit
   //ratioD=
   ratioD=8;  //Tu=~2  //1/4 volt az eredeti, egyenesre majdnem jó
@@ -436,7 +437,7 @@ void safetyGyors(){
    if(vonalSzam==3){
     haromtav = haromtav+tav;
    }
-   if(haromtav>1){
+   if(haromtav>2){
     motorM.writeMicroseconds(1000);
     safetyState = 1;
     upast=0;
@@ -460,6 +461,7 @@ void safetyLassu(){
   if(safetytav>450){
     motorM.writeMicroseconds(1000);
   }
+  
   else{
     piControll();
   }
@@ -502,7 +504,7 @@ void safetyLassu(){
      haromtav = haromtav+tav;
    }
    
-   if(haromtav>.30){
+   if(haromtav>0.18){
     safetyState = 0;
     upast=0;
     u2past=0;
@@ -523,17 +525,29 @@ void safetyCarFollow(){
     safetyLassu();
     break;
   }
+  if(analogRead(47)>150 && analogRead(49)>150){
+    state=1;
+    upast=0;
+    u2past=0;
+    haromtav=0;
+    egytav=0;
+  }
 }
 void gyors(){
-   kszi=0.7;
-   d5=1*velo+0.5; //0.75
+   kszi=0.7;  //0.7 volt az eredeti Egyenesben eddig a legjobb, ha kszi=0.8 és d5=1.v+0.5, de csak ha kis hibával indítod
+   d5=1.5*velo+0.5; //0.75
    if(velo<0.6){
      d5=2;
-   }
+        }
    lineControll();
 
   //PI
-   alap=3;
+   if(abs(linePosFront)>0.05){
+    alap=1.2;
+   }
+   else{
+    alap=2;
+   }
    u2=zd*u2past+(1-zd)*upast;
    u1=Kc*(alap-velo);
    u=(u1+u2);
@@ -554,7 +568,7 @@ void gyors(){
    if(vonalSzam==3){
     haromtav = haromtav+tav;
    }
-   if(haromtav>0.5){
+   if(haromtav>2){
     motorM.writeMicroseconds(1000);
     state = 3;
     upast=0;
@@ -565,8 +579,8 @@ void gyors(){
 }
 
 void fekez(){
-  if(velo>0.75){
-    motorM.writeMicroseconds(1250);
+  if(velo>1){
+    motorM.writeMicroseconds(1200);
     lineControll();
   }
   else{
@@ -577,7 +591,13 @@ void fekez(){
 }
 void lassu(){
   //PI
-   alap=1;
+   if(abs(linePosFront)>0.11){
+    alap=0.9;
+   }
+   else{
+    alap=1.3; 
+   }
+   
    u2=zd*u2past+(1-zd)*upast;
    u1=Kc*(alap-velo);
    u=(u1+u2);
@@ -596,9 +616,9 @@ void lassu(){
    Serial.println(motorFord);
    Serial.println(velo);
    */
-     ratioP=200;  ///1000-nél állandó lengés szögben, 800-nél leng, 150-nél még leng egy kicsit
+     ratioP=200;  ///1000-nél állandó lengés szögben, 800-nél leng, 150-nél még leng egy kicsit   200 volt
   //ratioD=
-  ratioD=1/3;  //Tu=~2  //1/4 volt az eredeti, egyenesre majdnem jó
+  ratioD=2;  //Tu=~2  //1/4 volt az eredeti, egyenesre majdnem jó 1/3 volt, amikor már ment kb, de roszul jött ki   2 volt
   //uszog=-(ratioP*linePosFront)/PI*180;
     uszog=(-(ratioP*linePosFront+ratioD*(linePosFront-linePosFrontOld)/0.02));
 // uszog=(linePosFront-0.992*linePosFrontOld+327.6 *uszogOld)/330;
@@ -636,7 +656,7 @@ void lassu(){
      haromtav = haromtav+tav;
    }
    
-   if(haromtav>.30){
+   if(haromtav>.24){
     state = 1;
     upast=0;
     u2past=0;
@@ -663,7 +683,7 @@ void setup() {
   pinMode(2,  OUTPUT);
 
 
-  pinMode(45,  OUTPUT); //Back chip selects Threshold: 0xA000
+  pinMode(45,  OUTPUT); //Back chip selects Threshold: 0xA000, átállítom B9B9-re hexában
   pinMode(31,  OUTPUT);
   pinMode(51,  OUTPUT); //B000
   pinMode(29,  OUTPUT);
@@ -702,6 +722,7 @@ void setup() {
 }
 
 void loop() {
+  Serial.println(timeElapsed);
   tavServo.writeMicroseconds(pwmbe);
   //Serial.print("Seb: ");
   //Serial.print(orient);
