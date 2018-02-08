@@ -12,6 +12,20 @@
 Servo servoMotor;
 Servo motorM;
 
+const int START_CNTR = 90;
+
+//Vasuthoz
+float tavVasut=0;
+char sokVonal=0;
+/*
+ * 0: alapállapot, figyeljül, hogy sok jön-e
+ * 1: figyeljük, hogy jön-e egy
+ * 2: figeljük, hogy jön-e a következő
+ */
+
+char stateVasut=0;
+int vasutCntr=0;
+int vasutWas=0;
 int vegTime=0;
 int kezdTime=0;
 int delaymillis=0;
@@ -21,7 +35,7 @@ double ratioP=0;
 double ratioD=0;
 double linePosFrontOld=0;
 //Analog labak távolsághoz
-//Baloldali: PB0 49
+//Baloldali: PB0 49  190
 //Jobboldali: PA1 47
 //Első: PA0 46
 
@@ -42,7 +56,7 @@ int lastVonalSzam=1;
 int basemotor=1500;
 
 int motorFord=1500;
-double Kc=1;//0.6158
+double Kc=1;//0.6158ű
 double zd=0.9678;
 
 double u1=0;
@@ -145,6 +159,8 @@ int int_korf=0;
 int parkingCntr =0;
 int parkingState = 0;
 int parkingDir = 0;
+
+int konvojCntr = 0;
 double ido=0; //UART ido szamlaloja
 
 
@@ -325,7 +341,6 @@ void handleParking(){
         Serial.print(" ");
       }
       Serial.print(" ParkingState:  ");
-      Serial.print(parkingState); 
       Serial.print(" ParkingDir  ");
       Serial.print(parkingDir);
       Serial.println("");
@@ -627,13 +642,91 @@ void handleDron(){
   }
 }
 
+void handleKonvoj()
+{
+  motorM.writeMicroseconds(1500);
+  Serial.println(analogRead(49));
+}
+
+void handleVasut(){
+  switch (stateVasut){
+    case 0: 
+    alap=0;
+    u2past=0;
+    upast=0;
+    motorM.writeMicroseconds(1000);
+    if(analogRead(46)>300){
+      vasutCntr++;
+    }
+    if(vasutCntr>2){
+      delay(3000);
+      stateVasut=1;
+    }
+    break;
+
+    case 1:
+    alap=0.6;
+    lineControll();
+    if(isnan(linePosFront)){
+      stateVasut=2;
+    }
+    break;
+    
+    case 2:
+    alap=0.6;
+    servoMotor.writeMicroseconds(1500);
+    if(!isnan(linePosFront)){
+      tavVasut=tavVasut+tav;
+      lineControll();
+    }
+    if(tavVasut>0.1){
+      stateVasut=3;
+      upast=0;
+      u2past=0;
+      tavVasut=0;
+    }
+    break;
+    
+    case 3:
+    alap=0.4;
+    lineControll();
+    if(isnan(linePosFront)){
+      stateVasut=4;      
+    }
+    break;
+    case 4:
+    motorM.writeMicroseconds(1000);
+    alap=0;
+    upast=0;
+    u2past=0;
+    if(analogRead(46)>300){
+      delay(3000);
+      stateVasut=5;
+    }
+    break;
+
+    case 5: 
+    alap=0.6;
+    servoMotor.writeMicroseconds(1500);
+    if(!isnan(linePosFront)){
+      tavVasut=tavVasut+tav;
+    }
+    if(tavVasut>0.27){
+      state=0;
+      vasutWas=1;
+    }
+    break;
+    
+  }
+}
+
 void lineFollowing(){
 
   if(vonalSzam!=3 && dronWas==0){
     tav_dron=tav_dron-tav; 
     if(tav_dron<0)tav_dron=0;
-    Serial.print("Dron tav: " );
-    Serial.println(tav_dron, 6);
+    //Serial.print("Dron tav: " );
+    //Serial.println(tav_dron, 6);
   }
   
   //Dron -->1
@@ -646,27 +739,76 @@ void lineFollowing(){
   }
   
   //Cel -->7
+  /*
   if (denumFront>15){
     //Cél jön
     state=7;
   }
-
-  if(cycleCount>225){
+*/
+  if(cycleCount>START_CNTR){
     if(analogRead(49)>150 && analogRead(47)>150){
-      state=2;
+      //state=2;
+      
+      
       while(statusUart!=HAL_TIMEOUT){
         statusUart=HAL_UART_Receive(&uart3struct,inBuf,1,5);
       }
     }
   }
-
+  
+   switch (sokVonal){
+    case 0:
+    if(denumFront>15){
+      sokVonal=1;
+    }
+    break;
+    case 1:
+    tavVasut=tavVasut+tav;
+    if(vonalSzam==1){
+      sokVonal=2;
+    }
+    break;
+    case 2:
+    tavVasut=tavVasut+tav;
+    if(denumFront>15  && vasutWas==0){
+      state=4;
+      tavVasut=0;
+    }
+    if(tavVasut>0.1){
+      tavVasut=0;
+      sokVonal=0;
+    }
+    break;  
+  }
+/*
+  if(cycleCount>START_CNTR){
+    float bal = analogRead(49);
+    float jobb = analogRead(47);
+    if(bal>150 && jobb<150){
+      konvojCntr++;
+    }
+    if(bal<150 && jobb>150){
+      konvojCntr++;
+    }
+    if(bal < 150 && jobb < 150){
+      konvojCntr--;
+    }
+    if(konvojCntr<0){
+      konvojCntr=0;
+    }
+    if(konvojCntr==10){
+      konvojCntr=0;
+      state=3;
+    }
+  }
+*/
 /*
   Serial.println(linePosFront, 8);
   Serial.println(linePosBack, 8);
   Serial.print("Orient: ");
   Serial.println(orient*180/PI);
 */
-  alap=constVelo; 
+  alap=0.6; 
 
   lineControll();
 }
@@ -758,6 +900,7 @@ void setup() {
   Serial.begin(115200);
   Serial.print("started\n");
   Serial.println(kszi);
+
   // start the SPI library:
   SPI.begin();
   SPI.beginTransaction(SPISettings(1000000, MSBFIRST, SPI_MODE1));
@@ -815,7 +958,23 @@ void setup() {
 
 void loop() {
   kezdTime=timeElapsed;
-    
+
+  Serial.print("state:  ");
+  Serial.print((int)state);
+  Serial.print("    stateVasut:  ");
+  Serial.println((int)stateVasut);
+  /*
+  Serial.print("  bal:  ");
+  Serial.print(analogRead(49));
+  Serial.print("  jobb:  ");
+  Serial.print(analogRead(47));
+  Serial.print("  ido:  ");
+  Serial.println(timeElapsed);
+  Serial.print("  konvojCntr:  ");
+  Serial.println(konvojCntr);
+  Serial.print("  cycleCount:  ");
+  Serial.println(cycleCount);
+  */
   //Send interrupt
   digitalWrite(44,HIGH);
   delay(1);
@@ -924,9 +1083,11 @@ void loop() {
     break;
     
     case 3:
+    handleKonvoj();
     break;
 
     case 4:
+    handleVasut();
     break;
 
     case 5:
