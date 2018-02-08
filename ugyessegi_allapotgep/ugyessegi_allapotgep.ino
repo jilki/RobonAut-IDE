@@ -351,7 +351,8 @@ void handleParking(){
       break;
     }
 //Inerc szenzor arduino UART
-    Serial.println("Inerc");
+      Serial.print("Inerc:  ");
+      HAL_UART_Receive(&uart3struct,(byte*) &ypr0,4,1);
       digitalWrite(38, LOW);
       digitalWrite(15, HIGH);
       delayMicroseconds(200);
@@ -360,8 +361,11 @@ void handleParking(){
       digitalWrite(38, HIGH);
    
       //Serial.println(ypr0,HEX);
-      Serial.println(ypr0*180/3.14,7);
-      Serial.println(ypr1*180/3.14,7);
+      Serial.print(ypr0*180/3.14,7);
+      Serial.print("    ");
+      Serial.print(ypr1*180/3.14,7);
+      Serial.print("    ");
+      Serial.println(timeElapsed);
  /*  
       //Serial.println(ido-timeElapsed);
       ido=timeElapsed;
@@ -760,12 +764,7 @@ void loop() {
   }
  */ 
   linePosFrontOld=linePosFront;
-  /*
-  Serial.print("State:  ");
-  Serial.print((int)state);
-  Serial.print("  Analog:  ");
-  Serial.println();
-  */
+
   vegTime=timeElapsed;
   if((vegTime-kezdTime)<20){
     delaymillis=20-(vegTime-kezdTime);
