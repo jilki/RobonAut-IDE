@@ -80,6 +80,7 @@ byte tresholdedValues[10]={0};
 float linePosFront=0;
 float linePosBack=0;
 float orient=0;
+float lastOrient=0;
 float Lsensor=0.208;
 
 uint8_t frontSensorPos[48]={0};
@@ -88,6 +89,7 @@ int numFront=0;
 int denumBack=0;
 int numBack=0;
 int forDifference[48]={0};
+int newForDifference[48]={0};
 int vonalSzam=1;
 int prevVonalSzam=1;
 double tavok[3]={0};
@@ -110,7 +112,13 @@ int dronWas=0;
 int counterDron=0;
 int infraDron=0;
 int diffInfraDron=0;
-
+float gyroHiba=0;
+float alapGyro=0;
+float gyroP=5;
+float lastGyro=0;
+float tavKanyar=0;
+float tavFal=0;
+float kiirlastOrient=0;
 
 //State-space controller
 double kszi=0.85;//sqrt(2)/2;
@@ -142,6 +150,11 @@ double ido=0; //UART ido szamlaloja
 
 const int delay_us = 50;
 
+float distance(float alpha, float beta) {
+        float phi = fmod(abs(beta - alpha), 360);       // This is either the distance or 360 - distance
+        float distance = phi > 180 ? 360 - phi : phi;
+        return distance;
+}
 
 void print_binary(int number, int num_digits) {
     int digit;
@@ -294,78 +307,270 @@ void handleFinish(){
 }
 
 void handleParking(){
-
   /*Állapotaink:
    * 0: Két fal jött, és van vonal
-   * 1: megszűnt a vonal
-   * 2: Kanyarodunk
-   * 3: megyünk előre
+   * 1: megszűnt az első fal, gyro szabályzó a következő vonalig
+   * 2: Szabályozzunk vonalra, és akkor álljunk meg, ha elfogyott a fal
+   * 3: kanyarodunk, amíg 
+   * 4: megyünk előre
    */
 
-  switch (parkingState){
-      case 0:
-      lineControll();
-      alap = 0.6;
-      //várunk az első fal végére
-      if(analogRead(47)<250 && analogRead(49)<250)
-        parkingCntr++;
-      if(parkingCntr==10){
-        parkingState = 1;
-        parkingCntr=0;
-      }
-      break;
-      
-      case 1:
-      servoMotor.writeMicroseconds(basemotor);
-      //várunk a második fal elejére
-      alap = 0.6;
-      if(analogRead(47)>250 || analogRead(49)>250)
-        parkingCntr++;
-      if(parkingCntr==10){
-        parkingCntr=0;
-        parkingState = 2;
-        if(analogRead(47)>analogRead(49)){
-          parkingDir = 47;
-        }else{
-          parkingDir = 49;  
-        }
-      }
-      break;
-      
-      case 2:
-      servoMotor.writeMicroseconds(basemotor);
-      //várunk a második fal végére
-      alap = 0.6;
-      if(analogRead(parkingDir)<250)
-        parkingCntr++;
-      if(parkingCntr==10){
-        parkingCntr=0;
-        parkingState=3;
-      }
-      break;
-      
-      case 3:
-        alap = -5;
-      break;
-      case 4:
-      break;
-    }
 //Inerc szenzor arduino UART
-      Serial.print("Inerc:  ");
+     // Serial.print("Inerc:  ");
       HAL_UART_Receive(&uart3struct,(byte*) &ypr0,4,1);
+      
+      Serial.print("Regi: ");
+      for(int i=0; i<48; i++){
+        Serial.print(forDifference[i]);
+        Serial.print(" ");
+      }
+      Serial.print(" ParkingState:  ");
+      Serial.print(parkingState); 
+      Serial.print(" ParkingDir  ");
+      Serial.print(parkingDir);
+      Serial.println("");
+      
       digitalWrite(38, LOW);
       digitalWrite(15, HIGH);
       delayMicroseconds(200);
       HAL_UART_Receive(&uart3struct,(byte*) &ypr0,4,10);
       HAL_UART_Receive(&uart3struct,(byte*) &ypr1,4,10);
       digitalWrite(38, HIGH);
+
+  switch (parkingState){
+    
+      case 0:
+      lineControll();
+      alap = 0.6;
+      //várunk az első fal végére
+      if(analogRead(47)<170 && analogRead(49)<170)
+        parkingCntr++;
+      if(parkingCntr==5){
+        parkingState = 1;
+        parkingCntr=0;
+        kiirlastOrient=lastOrient/PI*180;
+        alapGyro=ypr0/PI*180-lastOrient/PI*180;
+      /*  Serial.print("   lastorient: ");
+        Serial.print(kiirlastOrient);
+        Serial.print("   ypr0: ");
+        Serial.print(ypr0);
+        Serial.print("   alapgyro ");
+        Serial.println(alapGyro);
+        */
+      }
+      break;
+            
+      case 1:
+      gyroHiba=alapGyro-ypr0/PI*180;
+      uszog=gyroHiba*gyroP;
+      
+      if(uszog>27){
+        pwmbe=1000;
+      }
+      if(uszog<-26.876){
+        pwmbe=2100;
+      }
+      if(uszog<=27 && uszog>=19){
+        pwmbe=-614282.3652+107000.859*uszog-6935.889922*uszog*uszog+198.807768*uszog*uszog*uszog-2.127440683*uszog*uszog*uszog*uszog;
+      }
+      if(uszog<19 && uszog >-20.125){
+        pwmbe=1530.583548-15.34430827*uszog;
+      }
+      if(uszog<=-20.125 && uszog>=-26.876){
+        pwmbe=718281.2226+123156.6653*uszog+7911.076957*uszog*uszog+225.1145702*uszog*uszog*uszog+2.39507239*uszog*uszog*uszog*uszog;
+      }
+      
+      servoMotor.writeMicroseconds(pwmbe);
+      //várunk a második fal elejére
+      alap = 0.6;
+      if(!isnan(linePosFront)){
+        parkingCntr++;
+      }
+      Serial.print("    abalogRead jobb:  ");
+      Serial.println(analogRead(47));      
+      if(analogRead(47)>170){
+        parkingDir=47;
+      }
+      if(analogRead(49)>170){
+        parkingDir=49;
+      }
+      if(parkingCntr==5){
+        parkingState=2; 
+        parkingCntr=0;
+      }
+      break;
+      
+      case 2:
+      
+        lineControll();
+      /*
+      if(vonalSzam==2){
+        int i = 0;
+        int newDenumFront=0;
+        if(parkingDir==47){
+            while(forDifference[i+1]-forDifference[i]==1){
+              i++;
+            }
+            i++;
+            newDenumFront = denumFront-i;
+            int j=0;
+            while(i<denumFront){
+              newForDifference[j] = forDifference[i];
+              j++;
+              i++;
+            }
+            numFront=0;
+            for(int i=0;i<newDenumFront;i++)
+                numFront=numFront+newForDifference[i];
+            linePosFront=(((float)numFront/denumFront)-23.5)*0.006;
+        }else{
+            while(forDifference[denumFront-i-2]-forDifference[denumFront-i-1]==1){
+              i++;
+            }
+            i++;
+            newDenumFront = denumFront-i;
+            int j=0;
+            while(0<denumFront-i-1){
+              newForDifference[newDenumFront-1-j] = forDifference[newDenumFront-1-i];
+              j++;
+              i++;
+            }
+            numFront=0;
+            for(int i=0;i<newDenumFront;i++)
+                numFront=numFront+newForDifference[i];
+            linePosFront=(((float)numFront/denumFront)-23.5)*0.006;
+        }
+        Serial.print("uj: ");
+          for(int i=0; i<48; i++){
+          Serial.print(newForDifference[i]);
+          Serial.print(" ");
+        }
+        Serial.println("");*/
+        lineControll();
+       
+      
+      //várunk a második fal végére
+      alap = 0.6;
+      
+      tavFal=tavFal+tav;
+      if(tavFal>0.7){
+        parkingState=3;
+        alap=0;
+        u2past=0;
+        upast=0;
+        motorM.writeMicroseconds(1300);
+        delay(500);
+        motorM.writeMicroseconds(basemotor);
+        delay(500);
+        lastGyro=ypr0/PI*180;
+      }
+      break;
+      
+      case 3:
+        alap = -2;
+        if(parkingDir==47){
+          uszog=22;
+        }
+        else{
+          uszog=-22;
+        }
+        
+        if(uszog>27){
+          pwmbe=1000;
+        }
+        if(uszog<-26.876){
+          pwmbe=2100;
+        }
+        if(uszog<=27 && uszog>=19){
+          pwmbe=-614282.3652+107000.859*uszog-6935.889922*uszog*uszog+198.807768*uszog*uszog*uszog-2.127440683*uszog*uszog*uszog*uszog;
+        }
+        if(uszog<19 && uszog >-20.125){
+          pwmbe=1530.583548-15.34430827*uszog;
+        }
+        if(uszog<=-20.125 && uszog>=-26.876){
+          pwmbe=718281.2226+123156.6653*uszog+7911.076957*uszog*uszog+225.1145702*uszog*uszog*uszog+2.39507239*uszog*uszog*uszog*uszog;
+        }
+        
+        servoMotor.writeMicroseconds(pwmbe);
+        tavKanyar=tavKanyar+tav;
+        Serial.print("    tavkanyar: ");
+        Serial.println(tavKanyar);
+        if(tavKanyar<-1.6){
+          parkingState=4;
+          alap=0;
+          u2past=0;
+          upast=0;    
+          motorM.writeMicroseconds(basemotor);
+          alapGyro=ypr0/PI*180-lastOrient/PI*180;
+          delay(300); 
+        }
+        /*if(analogRead(parkingDir)>160 & tavKanyar>0.5){
+          parkingCntr++;         
+        }
+         if(parkingCntr==10){
+          parkingCntr=0;
+          parkingState=4;
+          alap=0;
+          u2past=0;
+          upast=0;
+          motorM.writeMicroseconds(basemotor);
+          delay(500);
+          alapGyro=ypr0/PI*180-lastOrient/PI*180;
+        }
+        */
+       // Serial.print("distance: ");
+       // Serial.println(distance(ypr0/PI*180,lastGyro));
+        /*if(distance(ypr0/PI*180,lastGyro)>87){
+          parkingState=4;
+          alap=0;
+          u2past=0;
+          upast=0;    
+          motorM.writeMicroseconds(basemotor);
+          delay(1);      
+        }
+        */
+        
+      break;
+      case 4:
+      alap=0.6;
+      
+      gyroHiba=alapGyro-ypr0/PI*180;
+      uszog=gyroHiba*gyroP;
+      
+      if(uszog>27){
+        pwmbe=1000;
+      }
+      if(uszog<-26.876){
+        pwmbe=2100;
+      }
+      if(uszog<=27 && uszog>=19){
+        pwmbe=-614282.3652+107000.859*uszog-6935.889922*uszog*uszog+198.807768*uszog*uszog*uszog-2.127440683*uszog*uszog*uszog*uszog;
+      }
+      if(uszog<19 && uszog >-20.125){
+        pwmbe=1530.583548-15.34430827*uszog;
+      }
+      if(uszog<=-20.125 && uszog>=-26.876){
+        pwmbe=718281.2226+123156.6653*uszog+7911.076957*uszog*uszog+225.1145702*uszog*uszog*uszog+2.39507239*uszog*uszog*uszog*uszog;
+      }
+      
+      servoMotor.writeMicroseconds(pwmbe);
+      break;
+    }
+
    
       //Serial.println(ypr0,HEX);
-      Serial.print(ypr0*180/3.14,7);
-      Serial.print("    ");
-      Serial.print(ypr1*180/3.14,7);
-      Serial.print("    ");
-      Serial.println(timeElapsed);
+      /*Serial.print(ypr0*180/3.14,7);
+      Serial.print("   lastorient: ");
+      Serial.print(kiirlastOrient);
+      Serial.print("   alapgyro ");
+      Serial.print(alapGyro);
+      Serial.print("   gyroHiba: ");
+      Serial.print(gyroHiba);
+      Serial.print("   uszog: ");
+      Serial.print(uszog);
+      Serial.print("    parkingState: ");
+      Serial.println(parkingState);
+      */
  /*  
       //Serial.println(ido-timeElapsed);
       ido=timeElapsed;
@@ -610,7 +815,7 @@ void setup() {
 
 void loop() {
   kezdTime=timeElapsed;
-  
+    
   //Send interrupt
   digitalWrite(44,HIGH);
   delay(1);
@@ -644,7 +849,7 @@ void loop() {
       if(frontSensorPos[i*8+j]==0){
         forDifference[denumFront]=i*8+j;
         denumFront++;
-        numFront=numFront+i*8+j;
+        numFront=numFront+i*8+j;linePosFront=(((float)numFront/denumFront)-23.5)*0.006;
       }
     }
   }
@@ -736,34 +941,14 @@ void loop() {
     break;
   }
 
-    piControll();
-//Vonalszam vizsgalat
-/*
-  if((tav2-temp)>tulHosszu){
-    counterTav=0;
-  }
+  //Mindig sebességszabályzunk az aktuális jelre (alap), alap változót írjuk a különböző állapotokban, és utána az u2past és upast nullázása állapotváltáskor
+  piControll();
 
-  if((vonalSzam-prevVonalSzam)!=0 && vonalSzam != 3){
-    if(counterTav==0){
-      temp=tav2;
-    }
-    if(counterTav!=0){
-      tavok[prevVonalSzam]=tav2-temp;
-      temp=tav2;
-    }
-    counterTav++;
-  }
-  if(counterTav==3){
-    counterTav=0;
-    if(tavok[2]<=0.01){
-      //Serial.println("Körforgalom");
-    }
-    if(tavok[0]<=0.01){
-      //Serial.println("Hordo");
-    }
-  }
- */ 
   linePosFrontOld=linePosFront;
+  if(isnan(orient)){
+    orient=lastOrient;
+  }
+  lastOrient=orient;
 
   vegTime=timeElapsed;
   if((vegTime-kezdTime)<20){
