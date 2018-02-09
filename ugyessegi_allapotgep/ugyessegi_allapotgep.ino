@@ -14,6 +14,15 @@ Servo motorM;
 
 const int START_CNTR = 90;
 
+//Körförgalomhoz
+float tav_0=0;
+float tav_1=0;
+char nullegyVonal=0;
+float tav_korforg=0;
+char stateForg=0;
+int korforgCntr=0;
+int korforgWas=0;
+
 //Vasuthoz
 float tavVasut=0;
 char sokVonal=0;
@@ -133,6 +142,7 @@ float lastGyro=0;
 float tavKanyar=0;
 float tavFal=0;
 float kiirlastOrient=0;
+char stateKorforg=0;
 
 //State-space controller
 double kszi=0.85;//sqrt(2)/2;
@@ -195,7 +205,7 @@ void piControll(){
    Serial.println(motorFord);
    Serial.println(velo);
    */
-   motorM.writeMicroseconds(motorFord);
+   
    u2past=u2;
    upast=u; 
 }
@@ -515,9 +525,8 @@ void handleParking(){
           alap=0;
           u2past=0;
           upast=0;    
-          motorM.writeMicroseconds(basemotor);
+          motorFord=basemotor;
           alapGyro=ypr0/PI*180-lastOrient/PI*180;
-          delay(300); 
         }
         /*if(analogRead(parkingDir)>160 & tavKanyar>0.5){
           parkingCntr++;         
@@ -547,7 +556,7 @@ void handleParking(){
         
       break;
       case 4:
-      alap=0.6;
+      alap=1;
       
       gyroHiba=alapGyro-ypr0/PI*180;
       uszog=gyroHiba*gyroP;
@@ -644,22 +653,24 @@ void handleDron(){
 
 void handleKonvoj()
 {
-  motorM.writeMicroseconds(1500);
+  motorFord=1500;
   Serial.println(analogRead(49));
 }
 
 void handleVasut(){
   switch (stateVasut){
     case 0: 
+    lineControll();
     alap=0;
-    u2past=0;
-    upast=0;
-    motorM.writeMicroseconds(1000);
-    if(analogRead(46)>300){
+    
+    motorFord=1000;
+    if(analogRead(46)>280){
       vasutCntr++;
     }
     if(vasutCntr>2){
       delay(3000);
+      u2past=0;
+      upast=0;
       stateVasut=1;
     }
     break;
@@ -679,7 +690,7 @@ void handleVasut(){
       tavVasut=tavVasut+tav;
       lineControll();
     }
-    if(tavVasut>0.1){
+    if(tavVasut>0.05){
       stateVasut=3;
       upast=0;
       u2past=0;
@@ -707,7 +718,7 @@ void handleVasut(){
 
     case 5: 
     alap=0.6;
-    servoMotor.writeMicroseconds(1500);
+    servoMotor.writeMicroseconds(1600);
     if(!isnan(linePosFront)){
       tavVasut=tavVasut+tav;
     }
@@ -720,6 +731,369 @@ void handleVasut(){
   }
 }
 
+void handleKorforg(){
+  korforgWas=1;
+      
+  switch(stateKorforg)
+  {
+    case 0:  
+    {
+     korforgCntr++;
+     alap=0;
+     motorFord=1000;
+     lineControll();
+     HAL_UART_Receive(&uart3struct,(byte*) &infr,4,1);   
+     digitalWrite(15, LOW);
+     digitalWrite(38, HIGH);
+     delayMicroseconds(200);
+      
+     HAL_UART_Receive(&uart3struct,(byte*) &infr,4,10);
+     int inval=infr;
+     if(inval>0 && inval<7)
+     int_korf=inval;
+     digitalWrite(15, HIGH);
+     Serial.println(int_korf);
+     if(korforgCntr>50){
+      if(int_korf==1){
+        stateKorforg=1;
+        upast=0;
+        u2past=0;
+        korforgCntr=0;
+      }
+      if(int_korf==2){
+        stateKorforg=2;
+        upast=0;
+        u2past=0;
+        korforgCntr=0;
+      }
+      if(int_korf==3){
+        stateKorforg=3;
+        upast=0;
+        u2past=0;
+        korforgCntr=0;
+      }
+      if(int_korf==4){
+        stateKorforg=4;
+        upast=0;
+        u2past=0;
+        korforgCntr=0;
+      }
+      if(int_korf==5){
+        stateKorforg=5;
+        upast=0;
+        u2past=0;
+        korforgCntr=0;
+      }
+      if(int_korf==6){
+        stateKorforg=6;
+        upast=0;
+        u2past=0;
+        korforgCntr=0;
+      }
+     }
+    }
+    break;
+    case 1:  //Jobbra megyünk első kijárat
+    {
+     alap=0.6;
+     tav_korforg=tav_korforg+tav;
+     if(tav_korforg<0.30){
+     uszog=25;
+     if(uszog>27){
+        pwmbe=1000;
+      }
+      if(uszog<-26.876){
+        pwmbe=2100;
+      }
+      if(uszog<=27 && uszog>=19){
+        pwmbe=-614282.3652+107000.859*uszog-6935.889922*uszog*uszog+198.807768*uszog*uszog*uszog-2.127440683*uszog*uszog*uszog*uszog;
+      }
+      if(uszog<19 && uszog >-20.125){
+        pwmbe=1530.583548-15.34430827*uszog;
+      }
+      if(uszog<=-20.125 && uszog>=-26.876){
+        pwmbe=718281.2226+123156.6653*uszog+7911.076957*uszog*uszog+225.1145702*uszog*uszog*uszog+2.39507239*uszog*uszog*uszog*uszog;
+      }
+      servoMotor.writeMicroseconds(pwmbe);
+      }
+      
+      if(tav_korforg>0.30)
+      {
+         uszog=0;
+         if(uszog>27){
+            pwmbe=1000;
+          }
+          if(uszog<-26.876){
+            pwmbe=2100;
+          }
+          if(uszog<=27 && uszog>=19){
+            pwmbe=-614282.3652+107000.859*uszog-6935.889922*uszog*uszog+198.807768*uszog*uszog*uszog-2.127440683*uszog*uszog*uszog*uszog;
+          }
+          if(uszog<19 && uszog >-20.125){
+            pwmbe=1530.583548-15.34430827*uszog;
+          }
+          if(uszog<=-20.125 && uszog>=-26.876){
+            pwmbe=718281.2226+123156.6653*uszog+7911.076957*uszog*uszog+225.1145702*uszog*uszog*uszog+2.39507239*uszog*uszog*uszog*uszog;
+          }
+          servoMotor.writeMicroseconds(pwmbe);
+          if(!isnan(linePosFront)){
+            Serial.println("van vonal");
+            lineControll();
+            korforgCntr++;
+            alap=0;
+            motorFord=1000;
+            if(korforgCntr>5){
+              Serial.println("Átmentünk nullába");
+              state=0;
+              korforgCntr=0;
+              upast=0;
+              u2past=0;
+            }
+            
+          }
+      }
+    }
+    break;
+
+    case 2:
+     alap=0.6;
+     switch(stateForg){
+      
+     case 0:
+       tav_korforg=tav_korforg+tav;
+     if(tav_korforg<0.25){
+     uszog=25;
+     if(uszog>27){
+        pwmbe=1000;
+      }
+      if(uszog<-26.876){
+        pwmbe=2100;
+      }
+      if(uszog<=27 && uszog>=19){
+        pwmbe=-614282.3652+107000.859*uszog-6935.889922*uszog*uszog+198.807768*uszog*uszog*uszog-2.127440683*uszog*uszog*uszog*uszog;
+      }
+      if(uszog<19 && uszog >-20.125){
+        pwmbe=1530.583548-15.34430827*uszog;
+      }
+      if(uszog<=-20.125 && uszog>=-26.876){
+        pwmbe=718281.2226+123156.6653*uszog+7911.076957*uszog*uszog+225.1145702*uszog*uszog*uszog+2.39507239*uszog*uszog*uszog*uszog;
+      }
+      servoMotor.writeMicroseconds(pwmbe);
+      }
+      
+      if(tav_korforg>0.25)
+      {
+         uszog=0;
+         if(uszog>27){
+            pwmbe=1000;
+          }
+          if(uszog<-26.876){
+            pwmbe=2100;
+          }
+          if(uszog<=27 && uszog>=19){
+            pwmbe=-614282.3652+107000.859*uszog-6935.889922*uszog*uszog+198.807768*uszog*uszog*uszog-2.127440683*uszog*uszog*uszog*uszog;
+          }
+          if(uszog<19 && uszog >-20.125){
+            pwmbe=1530.583548-15.34430827*uszog;
+          }
+          if(uszog<=-20.125 && uszog>=-26.876){
+            pwmbe=718281.2226+123156.6653*uszog+7911.076957*uszog*uszog+225.1145702*uszog*uszog*uszog+2.39507239*uszog*uszog*uszog*uszog;
+          }
+          servoMotor.writeMicroseconds(pwmbe);
+          if(!isnan(linePosFront)){
+            stateForg=1;
+            tav_korforg=0;
+            }
+          }
+      
+       break;
+       
+       case 1:
+        tav_korforg=tav_korforg+tav;
+          alap=0.6;
+          uszog=-29;
+           if(uszog>27){
+              pwmbe=1000;
+            }
+            if(uszog<-26.876){
+              pwmbe=2100;
+            }
+            if(uszog<=27 && uszog>=19){
+              pwmbe=-614282.3652+107000.859*uszog-6935.889922*uszog*uszog+198.807768*uszog*uszog*uszog-2.127440683*uszog*uszog*uszog*uszog;
+            }
+            if(uszog<19 && uszog >-20.125){
+              pwmbe=1530.583548-15.34430827*uszog;
+            }
+            if(uszog<=-20.125 && uszog>=-26.876){
+              pwmbe=718281.2226+123156.6653*uszog+7911.076957*uszog*uszog+225.1145702*uszog*uszog*uszog+2.39507239*uszog*uszog*uszog*uszog;
+            }
+            servoMotor.writeMicroseconds(pwmbe);
+            if(tav_korforg>0.2){
+              if(!isnan(linePosFront)){
+                Serial.println("van vonal");
+                lineControll();
+                korforgCntr++;
+                alap=0;
+                motorFord=1000;
+                if(korforgCntr>15){
+                  Serial.println("Átmentünk nullába");
+                  state=0;
+                  korforgCntr=0;
+                  upast=0;
+                  u2past=0;
+                }
+              }
+            }
+       break;
+    }
+    break;
+
+    case 3:
+     alap=0.6;
+     switch(stateForg){
+      
+     case 0:
+       tav_korforg=tav_korforg+tav;
+     if(tav_korforg<0.25){
+     uszog=25;
+     if(uszog>27){
+        pwmbe=1000;
+      }
+      if(uszog<-26.876){
+        pwmbe=2100;
+      }
+      if(uszog<=27 && uszog>=19){
+        pwmbe=-614282.3652+107000.859*uszog-6935.889922*uszog*uszog+198.807768*uszog*uszog*uszog-2.127440683*uszog*uszog*uszog*uszog;
+      }
+      if(uszog<19 && uszog >-20.125){
+        pwmbe=1530.583548-15.34430827*uszog;
+      }
+      if(uszog<=-20.125 && uszog>=-26.876){
+        pwmbe=718281.2226+123156.6653*uszog+7911.076957*uszog*uszog+225.1145702*uszog*uszog*uszog+2.39507239*uszog*uszog*uszog*uszog;
+      }
+      servoMotor.writeMicroseconds(pwmbe);
+      }
+      
+      if(tav_korforg>0.25)
+      {
+         uszog=0;
+         if(uszog>27){
+            pwmbe=1000;
+          }
+          if(uszog<-26.876){
+            pwmbe=2100;
+          }
+          if(uszog<=27 && uszog>=19){
+            pwmbe=-614282.3652+107000.859*uszog-6935.889922*uszog*uszog+198.807768*uszog*uszog*uszog-2.127440683*uszog*uszog*uszog*uszog;
+          }
+          if(uszog<19 && uszog >-20.125){
+            pwmbe=1530.583548-15.34430827*uszog;
+          }
+          if(uszog<=-20.125 && uszog>=-26.876){
+            pwmbe=718281.2226+123156.6653*uszog+7911.076957*uszog*uszog+225.1145702*uszog*uszog*uszog+2.39507239*uszog*uszog*uszog*uszog;
+          }
+          servoMotor.writeMicroseconds(pwmbe);
+          if(!isnan(linePosFront)){
+            stateForg=1;
+            tav_korforg=0;
+            }
+          }
+      
+       break;
+       
+       case 1:
+        tav_korforg=tav_korforg+tav;
+          alap=0.6;
+          uszog=-29;
+           if(uszog>27){
+              pwmbe=1000;
+            }
+            if(uszog<-26.876){
+              pwmbe=2100;
+            }
+            if(uszog<=27 && uszog>=19){
+              pwmbe=-614282.3652+107000.859*uszog-6935.889922*uszog*uszog+198.807768*uszog*uszog*uszog-2.127440683*uszog*uszog*uszog*uszog;
+            }
+            if(uszog<19 && uszog >-20.125){
+              pwmbe=1530.583548-15.34430827*uszog;
+            }
+            if(uszog<=-20.125 && uszog>=-26.876){
+              pwmbe=718281.2226+123156.6653*uszog+7911.076957*uszog*uszog+225.1145702*uszog*uszog*uszog+2.39507239*uszog*uszog*uszog*uszog;
+            }
+            servoMotor.writeMicroseconds(pwmbe);
+            if(tav_korforg>0.2){
+              if(!isnan(linePosFront)){
+                Serial.println("van vonal");
+                  stateForg=2;
+                  korforgCntr=0;
+                  tav_korforg=0;
+                  upast=0;
+                  u2past=0;
+                }
+              }
+        break;
+
+        case 2:
+          alap=0.6;
+          tav_korforg=tav_korforg+tav;
+          if(tav_korforg<0.6){
+            uszog=-29;
+           if(uszog>27){
+              pwmbe=1000;
+            }
+            if(uszog<-26.876){
+              pwmbe=2100;
+            }
+            if(uszog<=27 && uszog>=19){
+              pwmbe=-614282.3652+107000.859*uszog-6935.889922*uszog*uszog+198.807768*uszog*uszog*uszog-2.127440683*uszog*uszog*uszog*uszog;
+            }
+            if(uszog<19 && uszog >-20.125){
+              pwmbe=1530.583548-15.34430827*uszog;
+            }
+            if(uszog<=-20.125 && uszog>=-26.876){
+              pwmbe=718281.2226+123156.6653*uszog+7911.076957*uszog*uszog+225.1145702*uszog*uszog*uszog+2.39507239*uszog*uszog*uszog*uszog;
+            }
+            servoMotor.writeMicroseconds(pwmbe);
+          }
+            if(tav_korforg>0.6){
+              uszog=0;
+               if(uszog>27){
+                  pwmbe=1000;
+                }
+                if(uszog<-26.876){
+                  pwmbe=2100;
+                }
+                if(uszog<=27 && uszog>=19){
+                  pwmbe=-614282.3652+107000.859*uszog-6935.889922*uszog*uszog+198.807768*uszog*uszog*uszog-2.127440683*uszog*uszog*uszog*uszog;
+                }
+                if(uszog<19 && uszog >-20.125){
+                  pwmbe=1530.583548-15.34430827*uszog;
+                }
+                if(uszog<=-20.125 && uszog>=-26.876){
+                  pwmbe=718281.2226+123156.6653*uszog+7911.076957*uszog*uszog+225.1145702*uszog*uszog*uszog+2.39507239*uszog*uszog*uszog*uszog;
+                }
+              servoMotor.writeMicroseconds(pwmbe);
+              if(!isnan(linePosFront)){
+                Serial.println("van vonal");
+                lineControll();
+                korforgCntr++;
+                alap=0;
+                motorFord=1000;
+                if(korforgCntr>15){
+                  Serial.println("Átmentünk nullába");
+                  state=0;
+                  korforgCntr=0;
+                  upast=0;
+                  u2past=0;
+                }
+              }
+            }
+        break;
+          
+    }
+    break;
+  }
+}
 void lineFollowing(){
 
   if(vonalSzam!=3 && dronWas==0){
@@ -736,6 +1110,39 @@ void lineFollowing(){
     Serial.print("Dron tav: " );
     Serial.println(tav_dron, 6);
     if(tav_dron>=0.1)state=1;
+  }
+
+  switch (nullegyVonal)
+  {
+    case 0:
+    if(vonalSzam==0){
+      tav_0=tav_0+tav;
+    }
+    if(tav_0>0.05){
+      nullegyVonal=1;
+      tav_0=0;
+    }
+    break;
+    
+    case 1:
+    if(vonalSzam==1){
+      tav_1=tav_1+tav;
+    }
+    if(tav_1>0.05){
+      tav_1=0;
+      nullegyVonal=2;
+    }
+    break;
+    
+    case 2:
+    if(vonalSzam==0){
+      tav_0=tav_0+tav;
+    }
+    if(tav_0>0.05 && korforgWas==0){
+      state=6;
+      tav_0=0;
+    }
+    break;
   }
   
   //Cel -->7
@@ -808,7 +1215,7 @@ void lineFollowing(){
   Serial.print("Orient: ");
   Serial.println(orient*180/PI);
 */
-  alap=0.6; 
+  alap=1; 
 
   lineControll();
 }
@@ -961,8 +1368,10 @@ void loop() {
 
   Serial.print("state:  ");
   Serial.print((int)state);
-  Serial.print("    stateVasut:  ");
-  Serial.println((int)stateVasut);
+  Serial.print("    statekorforg:  ");
+  Serial.print((int)stateKorforg);
+  Serial.print("  statebelsoforg: ");
+  Serial.println(stateForg);
   /*
   Serial.print("  bal:  ");
   Serial.print(analogRead(49));
@@ -1068,7 +1477,10 @@ void loop() {
   if(cycleCount<250){
     cycleCount++;
   }
-  
+  if(abs(linePosFront)>0.08){
+    alap=alap/2;
+  }
+  piControll();
   switch (state){
     case 0:
     lineFollowing();
@@ -1094,7 +1506,7 @@ void loop() {
     break;
 
     case 6:
-    //handleKorforg();
+    handleKorforg();
     break;
 
     case 7:
@@ -1103,17 +1515,22 @@ void loop() {
   }
 
   //Mindig sebességszabályzunk az aktuális jelre (alap), alap változót írjuk a különböző állapotokban, és utána az u2past és upast nullázása állapotváltáskor
-  piControll();
 
+  motorM.writeMicroseconds(motorFord);
+  /*
+  if(isnan(linePosFront)){
+    linePosFront=linePosFrontOld;
+  }
+  */
   linePosFrontOld=linePosFront;
   if(isnan(orient)){
     orient=lastOrient;
   }
   lastOrient=orient;
-
+Serial.println("Feltoltott 4");
   vegTime=timeElapsed;
-  if((vegTime-kezdTime)<20){
-    delaymillis=20-(vegTime-kezdTime);
+  if((vegTime-kezdTime)<10){
+    delaymillis=10-(vegTime-kezdTime);
     if(delaymillis<0){
       delaymillis=0;
     }
